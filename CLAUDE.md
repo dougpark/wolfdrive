@@ -40,15 +40,17 @@ Adhere strictly to these design system tokens and layout constraints across all 
   --color-gemini-purple: #7c4dff;
   --color-gemini-sparkle: #0b57d0;
 }
-2. Layout & Scaffolding
-• Padding & Spacing: High breathability. Use standard container padding of p-8 (32px) or larger.
-• Rounding: High rounded corners. Use rounded-[12px] for buttons, inputs, and small file item cards. Use rounded-[24px] for major containers, modals, and preview panels.
+2. Layout and Scaffolding
+Padding & Spacing: High breathability. Use standard container padding of p-8 (32px) or larger.
+• Rounding: High rounded corners. Use rounded-xl (12px) for buttons, inputs, and small file item cards. Use rounded-3xl (24px) for major containers, modals, and preview panels.
 • Elevation: Minimal, soft floating shadows (shadow-sm or custom shadow-[0_2px_8px_rgba(0,0,0,0.06)]).
 • Typography: Font family Inter or Roboto. Headings must use font-weight: 500 or 600 with tracking-tight. Body text uses font-weight: 400 with leading-relaxed (1.6).
+
 3. Tailwind Implementation Tokens
-• Primary Buttons: bg-[#4285F4] text-white px-6 py-3 rounded-full hover:bg-blue-600 transition-all font-medium
-• Card Containers: bg-white border border-[#E3E3E3] rounded-[24px] shadow-sm p-6
-• Drive Grid Item: bg-white border border-[#E3E3E3] rounded-[12px] p-4 hover:border-[#4285F4] hover:shadow-md transition-all cursor-pointer
+• Primary Buttons: bg-gemini-blue text-white px-6 py-3 rounded-full hover:opacity-90 transition-all font-medium cursor-pointer
+• Card Containers: bg-gemini-card border border-gemini-border rounded-3xl shadow-sm p-6
+• Drive Grid Item: bg-gemini-card border border-gemini-border rounded-xl p-4 hover:border-gemini-blue hover:shadow-md transition-all cursor-pointer
+
 ## Backend & Database Guidelines
 • Entry Point: Everything boots from /src/index.ts.
 • Database Driver: Import directly via import { Database } from "bun:sqlite". Do not introduce heavy ORMs like Prisma unless explicitly requested.
