@@ -1,1 +1,27 @@
 @import "tailwindcss";
+
+/* 1. Base / Light Theme Tokens */
+@theme {
+  --color-gemini-bg: #ffffff;
+  --color-gemini-surface: #f0f4f9;
+  --color-gemini-card: #ffffff;
+  --color-gemini-border: #e1e3e1;
+  --color-gemini-text: #1f1f1f;
+  --color-gemini-subtext: #444746;
+  --color-gemini-blue: #1a73e8;
+  --color-gemini-purple: #7c4dff;
+  --color-gemini-sparkle: #0b57d0;
+}
+
+/* 2. Dark Mode Overrides */
+.dark {
+  --color-gemini-bg: #131314;
+  --color-gemini-surface: #1e1f20;
+  --color-gemini-card: #282a2c;
+  --color-gemini-border: #37393b;
+  --color-gemini-text: #e3e3e3;
+  --color-gemini-subtext: #9e9e9e;
+  --color-gemini-blue: #4285f4;
+  --color-gemini-purple: #a87ffb;
+  --color-gemini-sparkle: #7cacf8;
+}
