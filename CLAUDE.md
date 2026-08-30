@@ -29,11 +29,17 @@ WolfDrive is a self-hosted, all-inclusive local media manager running in Docker 
 ### Design System Rules ("Gemini-Modern")
 Adhere strictly to these design system tokens and layout constraints across all Vue components:
 1. Palette Tokens
-• primary-accent: #4285F4 (Buttons, active states, focus rings, selected items)
-• surface-white: #FFFFFF (Page & container backgrounds)
-• text-main: #1F1F1F (Headlines, primary list items)
-• text-muted: #474747 (Metadata labels, path breadcrumbs, subtitles)
-• border-light: #E3E3E3 (Subtle card borders, grid dividers)
+@theme {
+  --color-gemini-bg: #ffffff;
+  --color-gemini-surface: #f0f4f9;
+  --color-gemini-card: #ffffff;
+  --color-gemini-border: #e1e3e1;
+  --color-gemini-text: #1f1f1f;
+  --color-gemini-subtext: #444746;
+  --color-gemini-blue: #1a73e8;
+  --color-gemini-purple: #7c4dff;
+  --color-gemini-sparkle: #0b57d0;
+}
 2. Layout & Scaffolding
 • Padding & Spacing: High breathability. Use standard container padding of p-8 (32px) or larger.
 • Rounding: High rounded corners. Use rounded-[12px] for buttons, inputs, and small file item cards. Use rounded-[24px] for major containers, modals, and preview panels.
@@ -49,7 +55,6 @@ Adhere strictly to these design system tokens and layout constraints across all 
 • Production Build Serving: Hono must serve the compiled Vue static assets from ./dist in production, falling back to index.html for single-page app (SPA) client-side routing.
 • Extensible Plugin Viewer API: Route streaming and rendering endpoints logically (/api/stream/:id, /api/metadata/:id). Vue frontend components will inspect file mime_type to mount the appropriate media viewer plugin component dynamically.
 • Non-Destructive Scanning: Directory indexing must read, hash, and metadata-tag files without altering or moving original file paths on disk.
-Would you like to generate the initial package.json file configured with Bun, Hono, Vue 3, and Vite next?
 
 # UI & Vue 3 Design Constraints
 
@@ -60,10 +65,7 @@ Would you like to generate the initial package.json file configured with Bun, Ho
 
 ## 2. Hard Styling Constraints
 - DO NOT invent new color values or custom arbitrary Tailwind classes.
-- Primary Accent: `bg-[#4285F4]` / `text-[#4285F4]`
-- Standard Background: `bg-white` (Cards: `bg-[#F8F9FA]`)
-- Text Primary: `text-[#1F1F1F]` | Text Muted: `text-[#5F6368]`
-- Card Borders: `border border-[#E0E0E0] rounded-xl`
+
 
 ## 3. Component Construction Rules
 - Use `<script setup lang="ts">` exclusively for component script blocks.
