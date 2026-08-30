@@ -7,7 +7,10 @@ export default defineConfig({
         vue(),
         tailwindcss(),
     ],
+
     server: {
+        host: true, // Listens on all local IPs
+        allowedHosts: ['aistation.local'],
         port: 5173,
         proxy: {
             '/api': {
