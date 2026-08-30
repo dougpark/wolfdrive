@@ -37,7 +37,7 @@ onMounted(async () => {
     <main class="flex-1 flex flex-col items-center justify-center p-8">
       <!-- Main Status Card -->
       <div class="max-w-md w-full">
-        <div class="bg-gemini-card border border-gemini-border rounded-[24px] shadow-sm p-8 text-center transition-colors duration-200">
+        <div class="bg-gemini-card border border-gemini-border rounded-3xl shadow-sm p-8 text-center transition-colors duration-200">
           <h1 class="text-3xl font-semibold tracking-tight text-gemini-text mb-4 transition-colors duration-200">
             WolfDrive
           </h1>

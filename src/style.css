@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* 1. Base / Light Theme Tokens */
+/* 1. Base / Light Theme Tokens (Tailwind v4 syntax) */
 @theme {
   --color-gemini-bg: #ffffff;
   --color-gemini-surface: #f0f4f9;
@@ -13,30 +13,25 @@
   --color-gemini-sparkle: #0b57d0;
 }
 
-/* 2. Dark Mode Overrides */
-.dark {
-  --color-gemini-bg: #131314;
-  --color-gemini-surface: #1e1f20;
-  --color-gemini-card: #282a2c;
-  --color-gemini-border: #37393b;
-  --color-gemini-text: #e3e3e3;
-  --color-gemini-subtext: #9e9e9e;
-  --color-gemini-blue: #4285f4;
-  --color-gemini-purple: #a87ffb;
-  --color-gemini-sparkle: #7cacf8;
-}
+/* 2. Dark Mode Variable Overrides */
+@layer base {
+  html.dark {
+    --color-gemini-bg: #1b1f24; /*#131314;*/
+    --color-gemini-surface: #1e1f20;
+    --color-gemini-card: #282a2c;
+    --color-gemini-border: #37393b;
+    --color-gemini-text: #e3e3e3;
+    --color-gemini-subtext: #9e9e9e;
+    --color-gemini-blue: #4285f4;
+    --color-gemini-purple: #a87ffb;
+    --color-gemini-sparkle: #7cacf8;
+  }
 
-/* Root document defaults — NO transitions on base HTML/body */
-html, 
-body {
-  margin: 0;
-  padding: 0;
-  background-color: var(--color-gemini-bg);
-  color: var(--color-gemini-text);
-}
-
-html.dark, 
-html.dark body {
-  background-color: var(--color-gemini-bg);
-  color: var(--color-gemini-text);
+  html, 
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--color-gemini-bg);
+    color: var(--color-gemini-text);
+  }
 }

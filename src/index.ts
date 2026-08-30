@@ -1,7 +1,22 @@
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 
-const app = new Hono()
+// Define custom environment variables type for context storage
+type Env = {
+    Variables: {
+        userId: string
+    }
+}
+
+// Instantiate Hono with the custom Env type
+const app = new Hono<Env>()
+
+// Middleware inside Hono
+app.use('/api/*', async (c, next) => {
+    // Hardcoded default user context for now
+    c.set('userId', 'usr_default')
+    await next()
+})
 
 // Simple API Hello World endpoint
 app.get('/api/hello', (c) => {

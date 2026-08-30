@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { Settings, Menu, SlidersHorizontal, User, Shield } from 'lucide-vue-next';
+import { computed } from 'vue'
+import { useTheme } from '@/composables/useTheme'
+
+const { isDark } = useTheme()
+
+const logoSrc = computed(() => 
+  isDark.value 
+    ? '/assets/wolfdrive_logo_dark.png' 
+    : '/assets/wolfdrive_logo_lite.png'
+)
+
 
 // Define explicit component events
 const emit = defineEmits<{
@@ -47,8 +58,9 @@ onUnmounted(() => {
 
         <!-- Brand Link -->
         <a href="/" class="flex items-center gap-3 transition-opacity hover:opacity-90">
+        <!-- logo swapped based on isDark -->
           <img 
-            src="/assets/wolfdrive_logo_lite.png" 
+            :src="logoSrc" 
             alt="WolfDrive Logo" 
             class="h-9 w-auto object-contain"
           />

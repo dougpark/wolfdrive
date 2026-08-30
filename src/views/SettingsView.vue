@@ -71,12 +71,12 @@ onMounted(() => {
         
         <!-- Left Column: Categories Navigation -->
         <aside class="lg:col-span-4 xl:col-span-3">
-          <nav class="bg-gemini-card border border-gemini-border rounded-[24px] p-3 shadow-sm space-y-1">
+          <nav class="bg-gemini-card border border-gemini-border rounded-3xl p-3 shadow-sm space-y-1">
             <button
               v-for="cat in categories"
               :key="cat.id"
               @click="activeCategory = cat.id"
-              class="w-full flex items-center gap-3.5 px-4 py-3 rounded-[12px] text-sm font-medium transition-all text-left cursor-pointer"
+              class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left cursor-pointer"
               :class="[
                 activeCategory === cat.id
                   ? 'bg-gemini-surface text-gemini-blue font-semibold shadow-xs'
@@ -95,7 +95,7 @@ onMounted(() => {
 
         <!-- Right Column: Settings Panel -->
         <section class="lg:col-span-8 xl:col-span-9">
-          <div class="bg-gemini-card border border-gemini-border rounded-[24px] p-6 sm:p-8 shadow-sm transition-colors duration-200">
+          <div class="bg-gemini-card border border-gemini-border rounded-3xl p-6 sm:p-8 shadow-sm transition-colors duration-200">
             
             <!-- Category: Theme & Appearance -->
             <div v-if="activeCategory === 'theme'" class="space-y-6">
@@ -113,7 +113,7 @@ onMounted(() => {
                 <!-- Light Theme Option -->
                 <button
                   @click="applyTheme('light')"
-                  class="group relative flex flex-col items-center justify-between p-5 rounded-[16px] border text-center transition-all cursor-pointer"
+                  class="group relative flex flex-col items-center justify-between p-5 rounded-2xl border text-center transition-all cursor-pointer"
                   :class="[
                     selectedTheme === 'light'
                       ? 'border-gemini-blue bg-gemini-surface ring-2 ring-gemini-blue/20'
@@ -131,14 +131,14 @@ onMounted(() => {
                     v-if="selectedTheme === 'light'"
                     class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center"
                   >
-                    <Check class="h-3.5 w-3.5 stroke-[3]" />
+                    <Check class="h-3.5 w-3.5 stroke-3" />
                   </div>
                 </button>
 
                 <!-- Dark Theme Option -->
                 <button
                   @click="applyTheme('dark')"
-                  class="group relative flex flex-col items-center justify-between p-5 rounded-[16px] border text-center transition-all cursor-pointer"
+                  class="group relative flex flex-col items-center justify-between p-5 rounded-2xl border text-center transition-all cursor-pointer"
                   :class="[
                     selectedTheme === 'dark'
                       ? 'border-gemini-blue bg-gemini-surface ring-2 ring-gemini-blue/20'
@@ -156,14 +156,14 @@ onMounted(() => {
                     v-if="selectedTheme === 'dark'"
                     class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center"
                   >
-                    <Check class="h-3.5 w-3.5 stroke-[3]" />
+                    <Check class="h-3.5 w-3.5 stroke-3" />
                   </div>
                 </button>
 
                 <!-- System Theme Option -->
                 <button
                   @click="applyTheme('system')"
-                  class="group relative flex flex-col items-center justify-between p-5 rounded-[16px] border text-center transition-all cursor-pointer"
+                  class="group relative flex flex-col items-center justify-between p-5 rounded-2xl border text-center transition-all cursor-pointer"
                   :class="[
                     selectedTheme === 'system'
                       ? 'border-gemini-blue bg-gemini-surface ring-2 ring-gemini-blue/20'
@@ -181,7 +181,7 @@ onMounted(() => {
                     v-if="selectedTheme === 'system'"
                     class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center"
                   >
-                    <Check class="h-3.5 w-3.5 stroke-[3]" />
+                    <Check class="h-3.5 w-3.5 stroke-3" />
                   </div>
                 </button>
               </div>
