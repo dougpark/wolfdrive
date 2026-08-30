@@ -50,7 +50,7 @@ onUnmounted(() => {
         <!-- Mobile Sidebar Toggle -->
         <button 
           @click="emit('toggle-sidebar')"
-          class="rounded-[12px] p-2 text-gemini-subtext hover:bg-gemini-surface transition-colors lg:hidden cursor-pointer"
+          class="rounded-xl p-2 text-gemini-subtext hover:bg-gemini-surface transition-colors lg:hidden cursor-pointer"
           aria-label="Toggle navigation menu"
         >
           <Menu class="h-6 w-6" />
@@ -95,7 +95,7 @@ onUnmounted(() => {
           >
             <div
               v-if="isSettingsOpen"
-              class="absolute right-0 mt-2 w-56 rounded-[12px] border border-gemini-border bg-gemini-card p-2 shadow-sm z-50 transition-colors duration-200"
+              class="absolute right-0 mt-2 w-56 rounded-xl border border-gemini-border bg-gemini-card p-2 shadow-sm z-50 transition-colors duration-200"
             >
               <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gemini-subtext">
                 Preferences
@@ -104,7 +104,7 @@ onUnmounted(() => {
               <a
                 href="/settings"
                 @click="isSettingsOpen = false"
-                class="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
+                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
               >
                 <SlidersHorizontal class="h-4 w-4 text-gemini-subtext" />
                 App Settings
@@ -113,7 +113,7 @@ onUnmounted(() => {
               <a
                 href="/settings/account"
                 @click="isSettingsOpen = false"
-                class="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
+                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
               >
                 <User class="h-4 w-4 text-gemini-subtext" />
                 Account
@@ -124,7 +124,7 @@ onUnmounted(() => {
               <a
                 href="/settings/admin"
                 @click="isSettingsOpen = false"
-                class="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
+                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
               >
                 <Shield class="h-4 w-4 text-gemini-subtext" />
                 Server Admin
