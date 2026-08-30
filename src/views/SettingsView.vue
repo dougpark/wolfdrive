@@ -34,18 +34,8 @@ const categories: Category[] = [
 
 const activeCategory = ref<CategoryId>('theme')
 
-// Theme Selection Logic
-type ThemeMode = 'light' | 'dark' | 'system'
-
 onMounted(() => {
   initTheme()
-  const saved = localStorage.getItem('wolfdrive-theme') as ThemeMode | null
-  if (saved) {
-    applyTheme(saved)
-  } else {
-    const isDark = document.documentElement.classList.contains('dark')
-    selectedTheme.value = isDark ? 'dark' : 'light'
-  }
 })
 </script>
 
