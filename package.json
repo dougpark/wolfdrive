@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@libsql/client": "^0.17.4",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.4.0",
     "@types/node": "^26.4.0",
@@ -29,7 +30,7 @@
     "preview": "bun node_modules/vite/bin/vite.js preview",
     "start": "bun run src/index.ts",
     "db:generate": "drizzle-kit generate --dialect sqlite --schema ./src/db/schema.ts --out ./drizzle",
-    "db:migrate": "bun run src/db/migrate.ts"
+    "db:migrate": "bun run src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio"
   }
-  
 }
