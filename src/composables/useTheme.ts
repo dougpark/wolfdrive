@@ -21,6 +21,9 @@ export function useTheme() {
 
         isDark.value = enableDark
         document.documentElement.classList.toggle('dark', enableDark)
+
+        // Lock inline root background to guarantee paint color during route mounts
+        document.documentElement.style.backgroundColor = enableDark ? '#131314' : '#ffffff'
     }
 
     function initTheme() {

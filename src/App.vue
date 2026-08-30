@@ -8,7 +8,8 @@ onMounted(() => {
   initTheme()
 })
 </script>
-
 <template>
-  <router-view />
+  <div class="min-h-screen bg-gemini-bg text-gemini-text transition-colors duration-200">
+    <router-view />
+  </div>
 </template>

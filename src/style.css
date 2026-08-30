@@ -25,3 +25,18 @@
   --color-gemini-purple: #a87ffb;
   --color-gemini-sparkle: #7cacf8;
 }
+
+/* Root document defaults — NO transitions on base HTML/body */
+html, 
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-gemini-bg);
+  color: var(--color-gemini-text);
+}
+
+html.dark, 
+html.dark body {
+  background-color: var(--color-gemini-bg);
+  color: var(--color-gemini-text);
+}
