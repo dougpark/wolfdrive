@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { Settings, Menu, SlidersHorizontal, User, Shield } from 'lucide-vue-next';
+import { Info, Settings, Menu, SlidersHorizontal, User, Shield } from 'lucide-vue-next';
 import { computed } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 
@@ -101,6 +101,15 @@ onUnmounted(() => {
                 Preferences
               </div>
 
+              <!-- Inside Navbar dropdown menu -->
+              <a
+                href="/about"
+                @click="isSettingsOpen = false"
+                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors"
+              >
+                <Info class="h-4 w-4 text-gemini-subtext" />
+                About WolfDrive
+              </a>
               <a
                 href="/settings"
                 @click="isSettingsOpen = false"
