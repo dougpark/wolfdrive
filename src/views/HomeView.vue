@@ -11,7 +11,6 @@ import {
   FileText, 
   File, 
   HardDrive,
-  Clock,
   Filter,
   Book,     // Icon for EPUBs
   FileCode, // Icon for generic documents
@@ -30,10 +29,11 @@ interface MediaFile {
 }
 
 const files = ref<MediaFile[]>([])
+const categoryCounts = ref<Record<string, number>>({})
 const isLoading = ref(true)
 const searchQuery = ref('')
 const selectedCategory = ref<string>('all')
-const viewMode = ref<'grid' | 'list'>('grid')
+const viewMode = ref<'grid' | 'list'>('list')
 
 const categories = [
   { id: 'all', label: 'All Files', icon: HardDrive },
@@ -41,9 +41,20 @@ const categories = [
   { id: 'video', label: 'Videos', icon: Film },
   { id: 'audio', label: 'Music', icon: Music },
   { id: 'pdf', label: 'PDFs', icon: BookOpen },          // Dedicated PDF tab
-  { id: 'epub', label: 'eBooks', icon: Book },       // Dedicated EPUB tab
+  { id: 'epub', label: 'eBooks', icon: Book },           // Dedicated EPUB tab
   { id: 'document', label: 'Documents', icon: FileText },
 ]
+
+async function fetchStats() {
+  try {
+    const res = await fetch('/api/stats')
+    if (res.ok) {
+      categoryCounts.value = await res.json()
+    }
+  } catch (err) {
+    console.error('Failed to load category stats:', err)
+  }
+}
 
 async function fetchFiles() {
   isLoading.value = true
@@ -52,7 +63,7 @@ async function fetchFiles() {
     if (selectedCategory.value !== 'all') params.append('category', selectedCategory.value)
     if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
 
-    // Request up to 1,000 files per fetch
+    // Request up to 10,000 files per fetch
     params.append('limit', '10000')
 
     const res = await fetch(`/api/files?${params.toString()}`)
@@ -70,6 +81,21 @@ function formatBytes(bytes: number) {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function formatCount(num: number | undefined) {
+  if (!num) return '0'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'k'
+  return num.toLocaleString()
+}
+
+const totalFileCount = computed(() => {
+  return Object.values(categoryCounts.value).reduce((a, b) => a + b, 0)
+})
+
+function getCategoryCount(catId: string) {
+  if (catId === 'all') return totalFileCount.value
+  return categoryCounts.value[catId] || 0
 }
 
 function getCategoryIcon(category: string) {
@@ -96,6 +122,7 @@ watch(selectedCategory, () => {
 })
 
 onMounted(() => {
+  fetchStats()
   fetchFiles()
 })
 </script>
@@ -142,12 +169,12 @@ onMounted(() => {
       </div>
 
       <!-- Category Tabs -->
-      <div class="flex items-center gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
+      <div class="flex items-center gap-2 overflow-x-auto pb-4 mb-3 no-scrollbar">
         <button
           v-for="cat in categories"
           :key="cat.id"
           @click="selectedCategory = cat.id"
-          class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
+          class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
           :class="[
             selectedCategory === cat.id
               ? 'bg-gemini-surface text-gemini-blue border border-gemini-blue/30 shadow-xs'
@@ -156,7 +183,34 @@ onMounted(() => {
         >
           <component :is="cat.icon" class="h-4 w-4" />
           <span>{{ cat.label }}</span>
+          <span 
+            class="text-xs px-1.5 py-0.5 rounded-md font-mono transition-colors"
+            :class="selectedCategory === cat.id ? 'bg-gemini-blue/15 text-gemini-blue font-semibold' : 'bg-gemini-surface/80 text-gemini-subtext/70'"
+          >
+            {{ formatCount(getCategoryCount(cat.id)) }}
+          </span>
         </button>
+      </div>
+
+      <!-- Contextual Count Subheader -->
+      <div class="flex items-center justify-between text-xs text-gemini-subtext mb-5 px-1 font-medium">
+        <div>
+          <span v-if="searchQuery.trim()">
+            Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString() }}</strong> results 
+            <span v-if="selectedCategory !== 'all'"> in {{ selectedCategory }}</span>
+            for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
+          </span>
+          <span v-else-if="selectedCategory !== 'all'">
+            Showing <strong class="text-gemini-text font-semibold">{{ (categoryCounts[selectedCategory] || 0).toLocaleString() }}</strong> {{ selectedCategory }} files
+          </span>
+          <span v-else>
+            Showing <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString() }}</strong> total indexed files
+          </span>
+        </div>
+
+        <span v-if="files.length >= 10000" class="text-amber-500 font-mono text-[11px]">
+          (Capped at 10,000 items)
+        </span>
       </div>
 
       <!-- Loading Skeleton -->

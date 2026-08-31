@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
-import { eq, and, like } from 'drizzle-orm'
+import { eq, and, like, sql } from 'drizzle-orm'
 import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
@@ -44,11 +44,45 @@ app.use('/*', serveStatic({ root: './dist' }))
 app.get('*', serveStatic({ path: './dist/index.html' }))
 
 
-// GET /api/directories - Fetch user's registered paths
+// GET /api/directories - Fetch user directories with aggregated stats
 app.get('/api/directories', async (c) => {
     const userId = c.get('userId')
-    const dirs = await db.select().from(mediaDirectories).where(eq(mediaDirectories.userId, userId))
-    return c.json(dirs)
+
+    // 1. Fetch directories
+    const dirs = await db
+        .select()
+        .from(mediaDirectories)
+        .where(eq(mediaDirectories.userId, userId))
+
+    // 2. Fetch category file counts grouped by directoryId and mediaCategory
+    const stats = await db
+        .select({
+            directoryId: mediaFiles.directoryId,
+            category: mediaFiles.mediaCategory,
+            count: sql<number>`count(*)`,
+        })
+        .from(mediaFiles)
+        .where(eq(mediaFiles.userId, userId))
+        .groupBy(mediaFiles.directoryId, mediaFiles.mediaCategory)
+
+    // 3. Map aggregated stats into directory objects
+    const result = dirs.map((dir) => {
+        const dirStats = stats.filter((s) => s.directoryId === dir.id)
+        const breakdown = dirStats.reduce((acc, row) => {
+            acc[row.category] = Number(row.count)
+            return acc
+        }, {} as Record<string, number>)
+
+        const totalFiles = Object.values(breakdown).reduce((a, b) => a + b, 0)
+
+        return {
+            ...dir,
+            totalFiles,
+            breakdown,
+        }
+    })
+
+    return c.json(result)
 })
 
 // POST /api/directories - Register a new directory
@@ -125,6 +159,30 @@ app.get('/api/files', async (c) => {
 
     return c.json(files)
 })
+
+// GET /api/stats - Fetch count breakdown across categories
+app.get('/api/stats', async (c) => {
+    const userId = c.get('userId')
+
+    const stats = await db
+        .select({
+            category: mediaFiles.mediaCategory,
+            count: sql<number>`count(*)`,
+        })
+        .from(mediaFiles)
+        .where(eq(mediaFiles.userId, userId))
+        .groupBy(mediaFiles.mediaCategory)
+
+    // Returns: { image: 14200, video: 1200, audio: 4800, pdf: 312, ... }
+    const counts = stats.reduce((acc, row) => {
+        acc[row.category] = Number(row.count)
+        return acc
+    }, {} as Record<string, number>)
+
+    return c.json(counts)
+})
+
+
 
 export default {
     port: Number(process.env.PORT) || 3005,

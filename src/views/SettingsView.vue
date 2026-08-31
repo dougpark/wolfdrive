@@ -2,13 +2,13 @@
 import { ref, onMounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import Navbar from '@/components/layout/Navbar.vue'
-import { 
-  Palette, 
-  HardDrive, 
-  Cpu, 
-  User, 
-  Sun, 
-  Moon, 
+import {
+  Palette,
+  HardDrive,
+  Cpu,
+  User,
+  Sun,
+  Moon,
   Monitor,
   Check
 } from 'lucide-vue-next'
@@ -46,6 +46,19 @@ interface MediaDirectory {
   label: string | null
   enabled: boolean
   lastScannedAt: string | null
+  totalFiles?: number
+  breakdown?: Record<string, number>
+}
+
+// Category labels for badges
+const categoryLabels: Record<string, string> = {
+  image: 'Photos',
+  video: 'Videos',
+  audio: 'Music',
+  pdf: 'PDFs',
+  epub: 'eBooks',
+  document: 'Docs',
+  other: 'Other'
 }
 
 const directories = ref<MediaDirectory[]>([])
@@ -151,26 +164,19 @@ onMounted(() => {
 
       <!-- Two-Column Grid Layout -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
+
         <!-- Left Column: Categories Navigation -->
         <aside class="lg:col-span-4 xl:col-span-3">
           <nav class="bg-gemini-card border border-gemini-border rounded-3xl p-3 shadow-sm space-y-1">
-            <button
-              v-for="cat in categories"
-              :key="cat.id"
-              @click="activeCategory = cat.id"
+            <button v-for="cat in categories" :key="cat.id" @click="activeCategory = cat.id"
               class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left cursor-pointer"
               :class="[
                 activeCategory === cat.id
                   ? 'bg-gemini-surface text-gemini-blue font-semibold shadow-xs'
                   : 'text-gemini-subtext hover:bg-gemini-surface/60 hover:text-gemini-text'
-              ]"
-            >
-              <component 
-                :is="cat.icon" 
-                class="h-5 w-5 shrink-0"
-                :class="activeCategory === cat.id ? 'text-gemini-blue' : 'text-gemini-subtext'"
-              />
+              ]">
+              <component :is="cat.icon" class="h-5 w-5 shrink-0"
+                :class="activeCategory === cat.id ? 'text-gemini-blue' : 'text-gemini-subtext'" />
               <span class="truncate">{{ cat.label }}</span>
             </button>
           </nav>
@@ -178,14 +184,16 @@ onMounted(() => {
 
         <!-- Right Column: Settings Panel -->
         <section class="lg:col-span-8 xl:col-span-9">
-          <div class="bg-gemini-card border border-gemini-border rounded-3xl p-6 sm:p-8 shadow-sm transition-colors duration-200">
-            
+          <div
+            class="bg-gemini-card border border-gemini-border rounded-3xl p-6 sm:p-8 shadow-sm transition-colors duration-200">
+
             <!-- Category: Theme & Appearance -->
             <div v-if="activeCategory === 'theme'" class="space-y-6">
               <div>
                 <h2 class="text-xl font-semibold text-gemini-text">Theme & Appearance</h2>
                 <p class="text-sm text-gemini-subtext mt-1">
-                  Choose how WolfDrive appears on your screen. Select a light or dark theme, or sync with your system display preference.
+                  Choose how WolfDrive appears on your screen. Select a light or dark theme, or sync with your system
+                  display preference.
                 </p>
               </div>
 
@@ -194,76 +202,67 @@ onMounted(() => {
               <!-- Theme Cards Selection Grid -->
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <!-- Light Theme Option -->
-                <button
-                  @click="applyTheme('light')"
+                <button @click="applyTheme('light')"
                   class="group relative flex flex-col items-center justify-between p-5 rounded-2xl border text-center transition-all cursor-pointer"
                   :class="[
                     selectedTheme === 'light'
                       ? 'border-gemini-blue bg-gemini-surface ring-2 ring-gemini-blue/20'
                       : 'border-gemini-border bg-gemini-card hover:border-gemini-subtext/40 hover:bg-gemini-surface/40'
-                  ]"
-                >
-                  <div class="flex items-center justify-center h-12 w-12 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 mb-4 transition-transform group-hover:scale-105">
+                  ]">
+                  <div
+                    class="flex items-center justify-center h-12 w-12 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 mb-4 transition-transform group-hover:scale-105">
                     <Sun class="h-6 w-6" />
                   </div>
                   <div class="space-y-1">
                     <span class="block text-base font-medium text-gemini-text">Light Mode</span>
                     <span class="block text-xs text-gemini-subtext">Bright and high-contrast interface</span>
                   </div>
-                  <div 
-                    v-if="selectedTheme === 'light'"
-                    class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center"
-                  >
+                  <div v-if="selectedTheme === 'light'"
+                    class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center">
                     <Check class="h-3.5 w-3.5 stroke-3" />
                   </div>
                 </button>
 
                 <!-- Dark Theme Option -->
-                <button
-                  @click="applyTheme('dark')"
+                <button @click="applyTheme('dark')"
                   class="group relative flex flex-col items-center justify-between p-5 rounded-2xl border text-center transition-all cursor-pointer"
                   :class="[
                     selectedTheme === 'dark'
                       ? 'border-gemini-blue bg-gemini-surface ring-2 ring-gemini-blue/20'
                       : 'border-gemini-border bg-gemini-card hover:border-gemini-subtext/40 hover:bg-gemini-surface/40'
-                  ]"
-                >
-                  <div class="flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 mb-4 transition-transform group-hover:scale-105">
+                  ]">
+                  <div
+                    class="flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 mb-4 transition-transform group-hover:scale-105">
                     <Moon class="h-6 w-6" />
                   </div>
                   <div class="space-y-1">
                     <span class="block text-base font-medium text-gemini-text">Dark Mode</span>
                     <span class="block text-xs text-gemini-subtext">Reduced glare for low light</span>
                   </div>
-                  <div 
-                    v-if="selectedTheme === 'dark'"
-                    class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center"
-                  >
+                  <div v-if="selectedTheme === 'dark'"
+                    class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center">
                     <Check class="h-3.5 w-3.5 stroke-3" />
                   </div>
                 </button>
 
                 <!-- System Theme Option -->
-                <button
-                  @click="applyTheme('system')"
+                <button @click="applyTheme('system')"
                   class="group relative flex flex-col items-center justify-between p-5 rounded-2xl border text-center transition-all cursor-pointer"
                   :class="[
                     selectedTheme === 'system'
                       ? 'border-gemini-blue bg-gemini-surface ring-2 ring-gemini-blue/20'
                       : 'border-gemini-border bg-gemini-card hover:border-gemini-subtext/40 hover:bg-gemini-surface/40'
-                  ]"
-                >
-                  <div class="flex items-center justify-center h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 mb-4 transition-transform group-hover:scale-105">
+                  ]">
+                  <div
+                    class="flex items-center justify-center h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 mb-4 transition-transform group-hover:scale-105">
                     <Monitor class="h-6 w-6" />
                   </div>
                   <div class="space-y-1">
                     <span class="block text-base font-medium text-gemini-text">System Default</span>
                     <span class="block text-xs text-gemini-subtext">Sync with OS theme settings</span>
                   </div>
-                  <div 
-                    v-if="selectedTheme === 'system'"
-                    class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center"
-                  >
+                  <div v-if="selectedTheme === 'system'"
+                    class="absolute top-3 right-3 h-5 w-5 rounded-full bg-gemini-blue text-white flex items-center justify-center">
                     <Check class="h-3.5 w-3.5 stroke-3" />
                   </div>
                 </button>
@@ -273,111 +272,108 @@ onMounted(() => {
             <!-- Placeholder Panels for Future Settings -->
 
             <!-- Beginning of storage section -->
+            <!-- Category: Storage & Indexing -->
             <div v-if="activeCategory === 'storage'" class="space-y-6">
-                <div v-if="activeCategory === 'storage'" class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-xl font-semibold text-gemini-text">Storage & Media Directories</h2>
-        <p class="text-sm text-gemini-subtext mt-1">
-          Configure host file system directories to index photos, videos, audio, and documents.
-        </p>
-      </div>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 class="text-xl font-semibold text-gemini-text">Storage & Media Directories</h2>
+                  <p class="text-sm text-gemini-subtext mt-1">
+                    Configure host file system directories to index photos, videos, audio, and documents.
+                  </p>
+                </div>
 
-      <!-- Global Rescan All Button -->
-      <button
-        @click="triggerScanAll"
-        :disabled="isScanningAll || directories.length === 0"
-        class="bg-gemini-surface border border-gemini-border text-gemini-text rounded-xl px-4 py-2 text-sm font-medium hover:bg-gemini-card transition-colors flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-50"
-      >
-        <RefreshCw class="h-4 w-4 text-gemini-blue" :class="{ 'animate-spin': isScanningAll }" />
-        <span>{{ isScanningAll ? 'Scanning All...' : 'Rescan All Folders' }}</span>
-      </button>
-    </div>
+                <!-- Global Rescan All Button -->
+                <button @click="triggerScanAll" :disabled="isScanningAll || directories.length === 0"
+                  class="bg-gemini-surface border border-gemini-border text-gemini-text rounded-xl px-4 py-2 text-sm font-medium hover:bg-gemini-card transition-colors flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-50">
+                  <RefreshCw class="h-4 w-4 text-gemini-blue" :class="{ 'animate-spin': isScanningAll }" />
+                  <span>{{ isScanningAll ? 'Scanning All...' : 'Rescan All Folders Now' }}</span>
+                </button>
+              </div>
 
-    <hr class="border-gemini-border" />
+              <hr class="border-gemini-border" />
 
-    <!-- Add Directory Form -->
-    <form @submit.prevent="addDirectory" class="bg-gemini-surface p-4 rounded-2xl border border-gemini-border space-y-4">
-      <h3 class="text-sm font-semibold text-gemini-text flex items-center gap-2">
-        <FolderPlus class="h-4 w-4 text-gemini-blue" />
-        Add Media Directory
-      </h3>
-      
-      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-        <input
-          v-model="newPath"
-          type="text"
-          placeholder="/mnt/storage/media or /home/user/Pictures"
-          class="sm:col-span-7 bg-gemini-card border border-gemini-border rounded-xl px-3.5 py-2 text-sm text-gemini-text focus:outline-none focus:border-gemini-blue"
-          required
-        />
-        <input
-          v-model="newLabel"
-          type="text"
-          placeholder="Label (optional)"
-          class="sm:col-span-3 bg-gemini-card border border-gemini-border rounded-xl px-3.5 py-2 text-sm text-gemini-text focus:outline-none focus:border-gemini-blue"
-        />
-        <button
-          type="submit"
-          :disabled="isLoading"
-          class="sm:col-span-2 bg-gemini-blue text-white rounded-xl px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-        >
-          Add Path
-        </button>
-      </div>
-    </form>
+              <!-- Add Directory Form -->
+              <form @submit.prevent="addDirectory"
+                class="bg-gemini-surface p-4 rounded-2xl border border-gemini-border space-y-4">
+                <h3 class="text-sm font-semibold text-gemini-text flex items-center gap-2">
+                  <FolderPlus class="h-4 w-4 text-gemini-blue" />
+                  Add Media Directory
+                </h3>
 
-    <!-- Indexed Directories List -->
-    <div class="space-y-3">
-      <h3 class="text-sm font-semibold text-gemini-text">Monitored Folders</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <input v-model="newPath" type="text" placeholder="/mnt/storage/media or /home/user/Pictures"
+                    class="sm:col-span-7 bg-gemini-card border border-gemini-border rounded-xl px-3.5 py-2 text-sm text-gemini-text focus:outline-none focus:border-gemini-blue"
+                    required />
+                  <input v-model="newLabel" type="text" placeholder="Label (optional)"
+                    class="sm:col-span-3 bg-gemini-card border border-gemini-border rounded-xl px-3.5 py-2 text-sm text-gemini-text focus:outline-none focus:border-gemini-blue" />
+                  <button type="submit" :disabled="isLoading"
+                    class="sm:col-span-2 bg-gemini-blue text-white rounded-xl px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
+                    Add Path
+                  </button>
+                </div>
+              </form>
 
-      <div v-if="directories.length === 0" class="text-sm text-gemini-subtext p-6 text-center border border-dashed border-gemini-border rounded-2xl">
-        No media directories added yet. Add a filesystem path above to get started.
-      </div>
+              <!-- Indexed Directories List -->
+              <div class="space-y-3">
+                <h3 class="text-sm font-semibold text-gemini-text">Monitored Folders</h3>
 
-      <div 
-        v-for="dir in directories" 
-        :key="dir.id"
-        class="flex items-center justify-between p-4 bg-gemini-card border border-gemini-border rounded-xl"
-      >
-        <div class="flex items-center gap-3.5 min-w-0">
-          <div class="h-10 w-10 rounded-xl bg-gemini-surface flex items-center justify-center shrink-0">
-            <Folder class="h-5 w-5 text-gemini-blue" />
-          </div>
-          <div class="min-w-0">
-            <span class="block text-sm font-medium text-gemini-text truncate">
-              {{ dir.label || dir.path }}
-            </span>
-            <span class="block text-xs font-mono text-gemini-subtext truncate">
-              {{ dir.path }} &bull; Last scanned: {{ formatDate(dir.lastScannedAt) }}
-            </span>
-          </div>
-        </div>
+                <div v-if="directories.length === 0"
+                  class="text-sm text-gemini-subtext p-6 text-center border border-dashed border-gemini-border rounded-2xl">
+                  No media directories added yet. Add a filesystem path above to get started.
+                </div>
 
-        <div class="flex items-center gap-2">
-          <!-- Per-Folder Scan Button -->
-          <button
-            @click="triggerSingleScan(dir.id)"
-            :disabled="isScanning[dir.id]"
-            class="p-2 text-gemini-subtext hover:text-gemini-blue hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-            title="Rescan directory"
-          >
-            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': isScanning[dir.id] }" />
-          </button>
+                <!-- Monitored Folders Row Item -->
+                <div v-for="dir in directories" :key="dir.id"
+                  class="p-4 bg-gemini-card border border-gemini-border rounded-2xl space-y-3">
+                  <!-- Top Row: Icon, Path & Actions -->
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3.5 min-w-0">
+                      <div class="h-10 w-10 rounded-xl bg-gemini-surface flex items-center justify-center shrink-0">
+                        <Folder class="h-5 w-5 text-gemini-blue" />
+                      </div>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="block text-sm font-semibold text-gemini-text truncate">
+                            {{ dir.label || dir.path }}
+                          </span>
+                          <span v-if="dir.totalFiles !== undefined"
+                            class="inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-0.5 rounded-md bg-gemini-surface border border-gemini-border/60">
+                            <span class="text-gemini-text font-semibold">Files:</span>
+                            <span class="text-gemini-subtext font-bold">{{ dir.totalFiles.toLocaleString() }}</span>
+                          </span>
+                        </div>
+                        <span class="block text-xs font-mono text-gemini-subtext truncate mt-0.5">
+                          {{ dir.path }} &bull; Last scanned: {{ formatDate(dir.lastScannedAt) }}
+                        </span>
+                      </div>
+                    </div>
 
-          <!-- Delete Button -->
-          <button
-            @click="removeDirectory(dir.id)"
-            class="p-2 text-gemini-subtext hover:text-red-500 hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer"
-            title="Remove directory"
-          >
-            <Trash2 class="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-              
+                    <div class="flex items-center gap-2">
+                      <button @click="triggerSingleScan(dir.id)" :disabled="isScanning[dir.id]"
+                        class="p-2 text-gemini-subtext hover:text-gemini-blue hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                        title="Rescan directory">
+                        <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': isScanning[dir.id] }" />
+                      </button>
+
+                      <button @click="removeDirectory(dir.id)"
+                        class="p-2 text-gemini-subtext hover:text-red-500 hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer"
+                        title="Remove directory">
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Bottom Row: Category Badges Breakdown -->
+                  <div v-if="dir.breakdown && Object.keys(dir.breakdown).length > 0"
+                    class="flex items-center gap-2 pt-2 border-t border-gemini-border/50 flex-wrap">
+                    <span v-for="(count, catKey) in dir.breakdown" :key="catKey"
+                      class="text-xs px-2.5 py-1 rounded-lg bg-gemini-surface border border-gemini-border/60 text-gemini-subtext flex items-center gap-1.5">
+                      <span class="font-medium text-gemini-text">{{ categoryLabels[catKey] || catKey }}:</span>
+                      <span class="font-mono text-gemini-subtext font-semibold">{{ count.toLocaleString() }}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
             <!-- end of storage section -->
 
