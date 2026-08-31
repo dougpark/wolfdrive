@@ -12,6 +12,7 @@ import {
   Monitor,
   Check
 } from 'lucide-vue-next'
+import { FolderPlus, Trash2, Folder, RefreshCw } from 'lucide-vue-next'
 
 const { selectedTheme, applyTheme, initTheme } = useTheme()
 
@@ -36,6 +37,58 @@ const activeCategory = ref<CategoryId>('theme')
 
 onMounted(() => {
   initTheme()
+})
+
+interface MediaDirectory {
+  id: string
+  path: string
+  label: string | null
+  enabled: boolean
+  lastScannedAt: string | null
+}
+
+const directories = ref<MediaDirectory[]>([])
+const newPath = ref('')
+const newLabel = ref('')
+const isLoading = ref(false)
+
+async function fetchDirectories() {
+  try {
+    const res = await fetch('/api/directories')
+    directories.value = await res.json()
+  } catch (err) {
+    console.error('Failed to load directories', err)
+  }
+}
+
+async function addDirectory() {
+  if (!newPath.value.trim()) return
+  isLoading.value = true
+
+  try {
+    const res = await fetch('/api/directories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: newPath.value, label: newLabel.value })
+    })
+
+    if (res.ok) {
+      newPath.value = ''
+      newLabel.value = ''
+      await fetchDirectories()
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function removeDirectory(id: string) {
+  await fetch('/api/directories/' + id, { method: 'DELETE' })
+  await fetchDirectories()
+}
+
+onMounted(() => {
+  fetchDirectories()
 })
 </script>
 
@@ -178,10 +231,84 @@ onMounted(() => {
             </div>
 
             <!-- Placeholder Panels for Future Settings -->
-            <div v-else-if="activeCategory === 'storage'" class="space-y-4">
-              <h2 class="text-xl font-semibold text-gemini-text">Storage & Indexing</h2>
-              <p class="text-sm text-gemini-subtext">Configure media directory paths and rescan intervals.</p>
-            </div>
+            <div v-if="activeCategory === 'storage'" class="space-y-6">
+    <div>
+      <h2 class="text-xl font-semibold text-gemini-text">Storage & Media Directories</h2>
+      <p class="text-sm text-gemini-subtext mt-1">
+        Configure host file system directories to index photos, videos, audio, and documents.
+      </p>
+    </div>
+
+    <hr class="border-gemini-border" />
+
+    <!-- Add Directory Form -->
+    <form @submit.prevent="addDirectory" class="bg-gemini-surface p-4 rounded-2xl border border-gemini-border space-y-4">
+      <h3 class="text-sm font-semibold text-gemini-text flex items-center gap-2">
+        <FolderPlus class="h-4 w-4 text-gemini-blue" />
+        Add Media Directory
+      </h3>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+        <input
+          v-model="newPath"
+          type="text"
+          placeholder="/mnt/storage/media or /home/user/Pictures"
+          class="sm:col-span-7 bg-gemini-card border border-gemini-border rounded-xl px-3.5 py-2 text-sm text-gemini-text focus:outline-none focus:border-gemini-blue"
+          required
+        />
+        <input
+          v-model="newLabel"
+          type="text"
+          placeholder="Label (optional)"
+          class="sm:col-span-3 bg-gemini-card border border-gemini-border rounded-xl px-3.5 py-2 text-sm text-gemini-text focus:outline-none focus:border-gemini-blue"
+        />
+        <button
+          type="submit"
+          :disabled="isLoading"
+          class="sm:col-span-2 bg-gemini-blue text-white rounded-xl px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+        >
+          Add Path
+        </button>
+      </div>
+    </form>
+
+    <!-- Indexed Directories List -->
+    <div class="space-y-3">
+      <h3 class="text-sm font-semibold text-gemini-text">Monitored Folders</h3>
+
+      <div v-if="directories.length === 0" class="text-sm text-gemini-subtext p-6 text-center border border-dashed border-gemini-border rounded-2xl">
+        No media directories added yet. Add a filesystem path above to get started.
+      </div>
+
+      <div 
+        v-for="dir in directories" 
+        :key="dir.id"
+        class="flex items-center justify-between p-4 bg-gemini-card border border-gemini-border rounded-xl"
+      >
+        <div class="flex items-center gap-3.5 min-w-0">
+          <div class="h-10 w-10 rounded-xl bg-gemini-surface flex items-center justify-center shrink-0">
+            <Folder class="h-5 w-5 text-gemini-blue" />
+          </div>
+          <div class="min-w-0">
+            <span class="block text-sm font-medium text-gemini-text truncate">
+              {{ dir.label || dir.path }}
+            </span>
+            <span class="block text-xs font-mono text-gemini-subtext truncate">
+              {{ dir.path }}
+            </span>
+          </div>
+        </div>
+
+        <button
+          @click="removeDirectory(dir.id)"
+          class="p-2 text-gemini-subtext hover:text-red-500 hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer"
+          title="Remove directory"
+        >
+          <Trash2 class="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  </div>
 
             <div v-else-if="activeCategory === 'system'" class="space-y-4">
               <h2 class="text-xl font-semibold text-gemini-text">System & Hardware</h2>

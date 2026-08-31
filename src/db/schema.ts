@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm'
 
+// 0. Core Media File Metadata
 export const files = sqliteTable('files', {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
@@ -22,7 +23,18 @@ export const users = sqliteTable('users', {
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 })
 
-// 2. Example: User-bound eBook Progress
+// 2. Registered scan directories
+export const mediaDirectories = sqliteTable('media_directories', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    label: text('label'), // Optional display name (e.g., "Family Photos")
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    lastScannedAt: text('last_scanned_at'),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+})
+
+// 3. Example: User-bound eBook Progress
 // export const ebookProgress = sqliteTable('ebook_progress', {
 //     id: text('id').primaryKey(),
 //     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -32,7 +44,7 @@ export const users = sqliteTable('users', {
 //     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 // })
 
-// 3. Example: Custom Playlists / Albums
+// 4. Example: Custom Playlists / Albums
 // export const playlists = sqliteTable('playlists', {
 //     id: text('id').primaryKey(),
 //     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
