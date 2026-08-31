@@ -3,6 +3,7 @@ import { serveStatic } from 'hono/bun'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
 import { eq, and } from 'drizzle-orm'
+import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 
 
 // Define custom environment variables type for context storage
@@ -80,6 +81,20 @@ app.delete('/api/directories/:id', async (c) => {
     )
 
     return c.json({ success: true })
+})
+
+// POST /api/scan - Scan all user directories
+app.post('/api/scan', async (c) => {
+    const userId = c.get('userId')
+    const stats = await scanAllUserDirectories(userId)
+    return c.json({ success: true, ...stats })
+})
+
+// POST /api/scan/:id - Scan a specific directory
+app.post('/api/scan/:id', async (c) => {
+    const dirId = c.req.param('id')
+    const stats = await scanDirectory(dirId)
+    return c.json({ success: true, ...stats })
 })
 
 export default {

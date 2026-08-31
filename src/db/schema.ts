@@ -34,6 +34,22 @@ export const mediaDirectories = sqliteTable('media_directories', {
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 })
 
+// 3. Media Files Table
+export const mediaFiles = sqliteTable('media_files', {
+    id: text('id').primaryKey(),
+    directoryId: text('directory_id').notNull().references(() => mediaDirectories.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    path: text('path').notNull().unique(), // Absolute filesystem path
+    relativePath: text('relative_path').notNull(),
+    filename: text('filename').notNull(),
+    extension: text('extension').notNull(),
+    mimeType: text('mime_type'),
+    mediaCategory: text('media_category').notNull(), // 'image' | 'video' | 'audio' | 'document' | 'other'
+    sizeBytes: integer('size_bytes').notNull(),
+    mtimeMs: integer('mtime_ms').notNull(),
+    indexedAt: text('indexed_at').default(sql`CURRENT_TIMESTAMP`),
+})
+
 // 3. Example: User-bound eBook Progress
 // export const ebookProgress = sqliteTable('ebook_progress', {
 //     id: text('id').primaryKey(),

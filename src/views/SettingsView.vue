@@ -14,6 +14,7 @@ import {
 } from 'lucide-vue-next'
 import { FolderPlus, Trash2, Folder, RefreshCw } from 'lucide-vue-next'
 
+
 const { selectedTheme, applyTheme, initTheme } = useTheme()
 
 // Category Definitions
@@ -51,6 +52,8 @@ const directories = ref<MediaDirectory[]>([])
 const newPath = ref('')
 const newLabel = ref('')
 const isLoading = ref(false)
+const isScanning = ref<Record<string, boolean>>({})
+const isScanningAll = ref(false)
 
 async function fetchDirectories() {
   try {
@@ -85,6 +88,43 @@ async function addDirectory() {
 async function removeDirectory(id: string) {
   await fetch('/api/directories/' + id, { method: 'DELETE' })
   await fetchDirectories()
+}
+
+// Scan all user directories
+async function triggerScanAll() {
+  if (isScanningAll.value) return
+  isScanningAll.value = true
+
+  try {
+    const res = await fetch('/api/scan', { method: 'POST' })
+    const data = await res.json()
+    console.log(`Scan completed: ${data.totalIndexed} indexed, ${data.totalSkipped} skipped.`)
+    await fetchDirectories()
+  } catch (err) {
+    console.error('Scan failed', err)
+  } finally {
+    isScanningAll.value = false
+  }
+}
+
+// Scan a specific directory
+async function triggerSingleScan(id: string) {
+  if (isScanning.value[id]) return
+  isScanning.value[id] = true
+
+  try {
+    await fetch(`/api/scan/${id}`, { method: 'POST' })
+    await fetchDirectories()
+  } catch (err) {
+    console.error('Directory scan failed', err)
+  } finally {
+    isScanning.value[id] = false
+  }
+}
+
+function formatDate(isoStr: string | null) {
+  if (!isoStr) return 'Never scanned'
+  return new Date(isoStr).toLocaleString()
 }
 
 onMounted(() => {
@@ -231,12 +271,27 @@ onMounted(() => {
             </div>
 
             <!-- Placeholder Panels for Future Settings -->
+
+            <!-- Beginning of storage section -->
             <div v-if="activeCategory === 'storage'" class="space-y-6">
-    <div>
-      <h2 class="text-xl font-semibold text-gemini-text">Storage & Media Directories</h2>
-      <p class="text-sm text-gemini-subtext mt-1">
-        Configure host file system directories to index photos, videos, audio, and documents.
-      </p>
+                <div v-if="activeCategory === 'storage'" class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-semibold text-gemini-text">Storage & Media Directories</h2>
+        <p class="text-sm text-gemini-subtext mt-1">
+          Configure host file system directories to index photos, videos, audio, and documents.
+        </p>
+      </div>
+
+      <!-- Global Rescan All Button -->
+      <button
+        @click="triggerScanAll"
+        :disabled="isScanningAll || directories.length === 0"
+        class="bg-gemini-surface border border-gemini-border text-gemini-text rounded-xl px-4 py-2 text-sm font-medium hover:bg-gemini-card transition-colors flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-50"
+      >
+        <RefreshCw class="h-4 w-4 text-gemini-blue" :class="{ 'animate-spin': isScanningAll }" />
+        <span>{{ isScanningAll ? 'Scanning All...' : 'Rescan All Folders' }}</span>
+      </button>
     </div>
 
     <hr class="border-gemini-border" />
@@ -294,21 +349,37 @@ onMounted(() => {
               {{ dir.label || dir.path }}
             </span>
             <span class="block text-xs font-mono text-gemini-subtext truncate">
-              {{ dir.path }}
+              {{ dir.path }} &bull; Last scanned: {{ formatDate(dir.lastScannedAt) }}
             </span>
           </div>
         </div>
 
-        <button
-          @click="removeDirectory(dir.id)"
-          class="p-2 text-gemini-subtext hover:text-red-500 hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer"
-          title="Remove directory"
-        >
-          <Trash2 class="h-4 w-4" />
-        </button>
+        <div class="flex items-center gap-2">
+          <!-- Per-Folder Scan Button -->
+          <button
+            @click="triggerSingleScan(dir.id)"
+            :disabled="isScanning[dir.id]"
+            class="p-2 text-gemini-subtext hover:text-gemini-blue hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+            title="Rescan directory"
+          >
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': isScanning[dir.id] }" />
+          </button>
+
+          <!-- Delete Button -->
+          <button
+            @click="removeDirectory(dir.id)"
+            class="p-2 text-gemini-subtext hover:text-red-500 hover:bg-gemini-surface rounded-lg transition-colors cursor-pointer"
+            title="Remove directory"
+          >
+            <Trash2 class="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   </div>
+              
+            </div>
+            <!-- end of storage section -->
 
             <div v-else-if="activeCategory === 'system'" class="space-y-4">
               <h2 class="text-xl font-semibold text-gemini-text">System & Hardware</h2>
