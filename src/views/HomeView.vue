@@ -53,7 +53,7 @@ async function fetchFiles() {
     if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
 
     // Request up to 1,000 files per fetch
-    params.append('limit', '0')
+    params.append('limit', '10000')
 
     const res = await fetch(`/api/files?${params.toString()}`)
     files.value = await res.json()
