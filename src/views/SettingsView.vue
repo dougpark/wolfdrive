@@ -13,7 +13,7 @@ import {
   Check
 } from 'lucide-vue-next'
 import { FolderPlus, Trash2, Folder, RefreshCw } from 'lucide-vue-next'
-
+import { FileCode, Save } from 'lucide-vue-next'
 
 const { selectedTheme, applyTheme, initTheme } = useTheme()
 
@@ -36,8 +36,41 @@ const categories: Category[] = [
 
 const activeCategory = ref<CategoryId>('theme')
 
+// Ignore Patterns State
+const ignoreText = ref('')
+const isSavingIgnore = ref(false)
+
+async function fetchIgnorePatterns() {
+  try {
+    const res = await fetch('/api/settings/ignore')
+    const patterns: string[] = await res.json()
+    ignoreText.value = patterns.join('\n')
+  } catch (err) {
+    console.error('Failed to load ignore patterns', err)
+  }
+}
+
+async function saveIgnorePatterns() {
+  isSavingIgnore.value = true
+  const patterns = ignoreText.value
+    .split('\n')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+
+  try {
+    await fetch('/api/settings/ignore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patterns }),
+    })
+  } finally {
+    isSavingIgnore.value = false
+  }
+}
+
 onMounted(() => {
   initTheme()
+  fetchIgnorePatterns()
 })
 
 interface MediaDirectory {
@@ -312,6 +345,31 @@ onMounted(() => {
                   </button>
                 </div>
               </form>
+
+              <!-- Add inside Storage category panel in SettingsView.vue -->
+              <div class="bg-gemini-surface p-5 rounded-2xl border border-gemini-border space-y-4 mt-6">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gemini-text flex items-center gap-2">
+                      <FileCode class="h-4 w-4 text-gemini-blue" />
+                      Global Ignore List (.gitignore style)
+                    </h3>
+                    <p class="text-xs text-gemini-subtext mt-0.5">
+                      Specify file names, extensions, or directory patterns to exclude from index scans.
+                    </p>
+                  </div>
+
+                  <button @click="saveIgnorePatterns" :disabled="isSavingIgnore"
+                    class="bg-gemini-blue text-white rounded-xl px-3.5 py-1.5 text-xs font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                    <Save class="h-3.5 w-3.5" />
+                    <span>{{ isSavingIgnore ? 'Saving...' : 'Save Rules' }}</span>
+                  </button>
+                </div>
+
+                <textarea v-model="ignoreText" rows="6"
+                  placeholder="node_modules/&#10;.git/&#10;*.tmp&#10;*.log&#10;.DS_Store"
+                  class="w-full bg-gemini-card border border-gemini-border rounded-xl p-3 text-xs font-mono text-gemini-text focus:outline-none focus:border-gemini-blue transition-colors leading-relaxed"></textarea>
+              </div>
 
               <!-- Indexed Directories List -->
               <div class="space-y-3">

@@ -1,6 +1,8 @@
 # dependencies (bun install)
 node_modules
 
+._.DS_Store
+
 # output
 out
 dist

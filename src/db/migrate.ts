@@ -14,4 +14,4 @@ const db = drizzle(sqlite);
 
 console.log('Running database migrations...');
 await migrate(db, { migrationsFolder: './drizzle' });
-console.log('Database schema is up to date.');
+console.log('Database schema is now up to date.');

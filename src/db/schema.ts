@@ -50,6 +50,13 @@ export const mediaFiles = sqliteTable('media_files', {
     indexedAt: text('indexed_at').default(sql`CURRENT_TIMESTAMP`),
 })
 
+// app_settings table for storing application-wide settings, such as ignore patterns, scan intervals, etc.
+export const appSettings = sqliteTable('app_settings', {
+    key: text('key').primaryKey(), // e.g., 'ignore_patterns'
+    value: text('value').notNull(), // JSON string blob
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+})
+
 // 3. Example: User-bound eBook Progress
 // export const ebookProgress = sqliteTable('ebook_progress', {
 //     id: text('id').primaryKey(),

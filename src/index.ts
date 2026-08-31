@@ -6,6 +6,7 @@ import { eq, and, like, sql } from 'drizzle-orm'
 import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
+import { appSettings } from './db/schema'
 
 // Define custom environment variables type for context storage
 type Env = {
@@ -182,7 +183,55 @@ app.get('/api/stats', async (c) => {
     return c.json(counts)
 })
 
+// App Settings API Endpoints
 
+// Default ignore rules
+const DEFAULT_IGNORES = [
+    'node_modules/',
+    '.git/',
+    '.DS_Store',
+    '*.tmp',
+    '*.log',
+    '$RECYCLE.BIN/',
+    'System Volume Information/'
+]
+
+// GET /api/settings/ignore - Fetch ignore list
+app.get('/api/settings/ignore', async (c) => {
+    const [row] = await db.select().from(appSettings).where(eq(appSettings.key, 'ignore_patterns'))
+
+    if (!row) {
+        return c.json(DEFAULT_IGNORES)
+    }
+
+    try {
+        return c.json(JSON.parse(row.value))
+    } catch {
+        return c.json(DEFAULT_IGNORES)
+    }
+})
+
+// POST /api/settings/ignore - Update ignore list
+app.post('/api/settings/ignore', async (c) => {
+    const { patterns } = await c.req.json<{ patterns: string[] }>()
+
+    await db
+        .insert(appSettings)
+        .values({
+            key: 'ignore_patterns',
+            value: JSON.stringify(patterns),
+            updatedAt: new Date().toISOString(),
+        })
+        .onConflictDoUpdate({
+            target: appSettings.key,
+            set: {
+                value: JSON.stringify(patterns),
+                updatedAt: new Date().toISOString(),
+            },
+        })
+
+    return c.json({ success: true, patterns })
+})
 
 export default {
     port: Number(process.env.PORT) || 3005,

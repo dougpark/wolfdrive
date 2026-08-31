@@ -3,6 +3,41 @@ import { join, extname, relative } from 'node:path'
 import { db } from '../db'
 import { mediaDirectories, mediaFiles } from '../db/schema'
 import { eq, and } from 'drizzle-orm'
+import { appSettings } from '../db/schema'
+
+// Helper to load current ignore patterns from DB
+async function getIgnorePatterns(): Promise<string[]> {
+    const [row] = await db.select().from(appSettings).where(eq(appSettings.key, 'ignore_patterns'))
+    if (!row) return ['.git/', 'node_modules/', '.DS_Store', '*.tmp']
+    try {
+        return JSON.parse(row.value)
+    } catch {
+        return []
+    }
+}
+
+function shouldIgnore(relativePath: string, filename: string, patterns: string[]): boolean {
+    for (const pattern of patterns) {
+        const trimmed = pattern.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
+
+        // Folder ignore rule (e.g., node_modules/ or cache/)
+        if (trimmed.endsWith('/')) {
+            const dirName = trimmed.slice(0, -1)
+            if (relativePath.includes(`/${dirName}/`) || relativePath.startsWith(`${dirName}/`) || filename === dirName) {
+                return true
+            }
+        }
+
+        // Glob wildcard pattern matching (e.g., *.tmp, *.log, .DS_Store)
+        const glob = new Bun.Glob(trimmed)
+        if (glob.match(filename) || glob.match(relativePath)) {
+            return true
+        }
+    }
+    return false
+}
+
 
 function getMediaCategory(mimeType: string, ext: string): string {
     if (mimeType.startsWith('image/')) return 'image'
@@ -15,6 +50,8 @@ function getMediaCategory(mimeType: string, ext: string): string {
 }
 
 export async function scanDirectory(directoryId: string): Promise<{ indexed: number; skipped: number }> {
+    const ignorePatterns = await getIgnorePatterns()
+
     const [dir] = await db.select().from(mediaDirectories).where(eq(mediaDirectories.id, directoryId))
     if (!dir || !dir.enabled) return { indexed: 0, skipped: 0 }
 
@@ -35,6 +72,13 @@ export async function scanDirectory(directoryId: string): Promise<{ indexed: num
             const absolutePath = join(parent, entry.name)
 
             const relPath = relative(dir.path, absolutePath)
+
+            // Check ignore list
+            if (shouldIgnore(relPath, entry.name, ignorePatterns)) {
+                skippedCount++
+                continue
+            }
+
             const file = Bun.file(absolutePath)
 
             const exists = await file.exists()
