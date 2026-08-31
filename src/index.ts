@@ -2,9 +2,10 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, like } from 'drizzle-orm'
 import { scanDirectory, scanAllUserDirectories } from './services/scanner'
-
+import { mediaFiles } from './db/schema'
+import { desc } from "drizzle-orm";
 
 // Define custom environment variables type for context storage
 type Env = {
@@ -95,6 +96,34 @@ app.post('/api/scan/:id', async (c) => {
     const dirId = c.req.param('id')
     const stats = await scanDirectory(dirId)
     return c.json({ success: true, ...stats })
+})
+
+// GET /api/files - Fetch indexed media files
+app.get('/api/files', async (c) => {
+    const userId = c.get('userId')
+    const category = c.req.query('category') // 'image' | 'video' | 'audio' | 'document'
+    const search = c.req.query('search')
+    const limitParam = c.req.query('limit')
+    const limit = limitParam ? parseInt(limitParam) : 1000
+
+    let conditions = [eq(mediaFiles.userId, userId)]
+
+    if (category && category !== 'all') {
+        conditions.push(eq(mediaFiles.mediaCategory, category))
+    }
+
+    if (search) {
+        conditions.push(like(mediaFiles.filename, `%${search}%`))
+    }
+
+    const files = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(...conditions))
+        .orderBy(desc(mediaFiles.mtimeMs))
+        .limit(limit)
+
+    return c.json(files)
 })
 
 export default {

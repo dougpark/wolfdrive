@@ -8,7 +8,9 @@ function getMediaCategory(mimeType: string, ext: string): string {
     if (mimeType.startsWith('image/')) return 'image'
     if (mimeType.startsWith('video/')) return 'video'
     if (mimeType.startsWith('audio/')) return 'audio'
-    if (mimeType.includes('pdf') || ['epub', 'mobi', 'txt', 'md'].includes(ext)) return 'document'
+    if (mimeType.includes('pdf') || ext === 'pdf') return 'pdf' // Isolated PDF category
+    if (mimeType.includes('epub') || ext === 'epub') return 'epub' // Isolated EPUB category
+    if (['mobi', 'txt', 'md', 'doc', 'docx'].includes(ext)) return 'document'
     return 'other'
 }
 

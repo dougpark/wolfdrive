@@ -1,56 +1,240 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import Navbar from '@/components/layout/Navbar.vue'
-import { useTheme } from '@/composables/useTheme'
+import { 
+  Search, 
+  Grid, 
+  List as ListIcon, 
+  Image as ImageIcon, 
+  Film, 
+  Music, 
+  FileText, 
+  File, 
+  HardDrive,
+  Clock,
+  Filter,
+  Book,     // Icon for EPUBs
+  FileCode, // Icon for generic documents
+  BookOpen  // Icon for PDFs
+} from 'lucide-vue-next'
 
-const { isDark, toggleTheme } = useTheme()
-
-interface HelloResponse {
-  message: string
-  status: string
+interface MediaFile {
+  id: string
+  filename: string
+  relativePath: string
+  extension: string
+  mimeType: string
+  mediaCategory: 'image' | 'video' | 'audio' | 'pdf' | 'epub' | 'document' | 'other'
+  sizeBytes: number
+  mtimeMs: number
 }
 
-const message = ref('Loading...')
+const files = ref<MediaFile[]>([])
+const isLoading = ref(true)
+const searchQuery = ref('')
+const selectedCategory = ref<string>('all')
+const viewMode = ref<'grid' | 'list'>('grid')
 
-// Optional: Handle mobile sidebar toggle event from Navbar if needed
-const handleToggleSidebar = () => {
-  // Logic for opening mobile drawer/sidebar can be placed here
-}
+const categories = [
+  { id: 'all', label: 'All Files', icon: HardDrive },
+  { id: 'image', label: 'Photos', icon: ImageIcon },
+  { id: 'video', label: 'Videos', icon: Film },
+  { id: 'audio', label: 'Music', icon: Music },
+  { id: 'pdf', label: 'PDFs', icon: BookOpen },          // Dedicated PDF tab
+  { id: 'epub', label: 'eBooks', icon: Book },       // Dedicated EPUB tab
+  { id: 'document', label: 'Documents', icon: FileText },
+]
 
-onMounted(async () => {
+async function fetchFiles() {
+  isLoading.value = true
   try {
-    const res = await fetch('/api/hello')
-    const data = await res.json() as HelloResponse
-    message.value = data.message
+    const params = new URLSearchParams()
+    if (selectedCategory.value !== 'all') params.append('category', selectedCategory.value)
+    if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
+
+    // Request up to 1,000 files per fetch
+    params.append('limit', '0')
+
+    const res = await fetch(`/api/files?${params.toString()}`)
+    files.value = await res.json()
   } catch (err) {
-    message.value = 'Failed to connect to WolfDrive server.'
+    console.error('Failed to load files:', err)
+  } finally {
+    isLoading.value = false
   }
+}
+
+function formatBytes(bytes: number) {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function getCategoryIcon(category: string) {
+  switch (category) {
+    case 'image': return ImageIcon
+    case 'video': return Film
+    case 'audio': return Music
+    case 'pdf': return BookOpen
+    case 'epub': return Book
+    case 'document': return FileText
+    default: return File
+  }
+}
+
+// Debounce search input
+let searchTimeout: ReturnType<typeof setTimeout>
+watch(searchQuery, () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => fetchFiles(), 300)
+})
+
+watch(selectedCategory, () => {
+  fetchFiles()
+})
+
+onMounted(() => {
+  fetchFiles()
 })
 </script>
 
 <template>
   <div class="min-h-screen bg-gemini-bg text-gemini-text flex flex-col transition-colors duration-200">
-    <!-- Top Navigation Bar -->
-    <Navbar @toggle-sidebar="handleToggleSidebar" />
+    <Navbar />
 
-    <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col items-center justify-center p-8">
-      <!-- Main Status Card -->
-      <div class="max-w-md w-full">
-        <div class="bg-gemini-card border border-gemini-border rounded-3xl shadow-sm p-8 text-center transition-colors duration-200">
-          <h1 class="text-3xl font-semibold tracking-tight text-gemini-text mb-4 transition-colors duration-200">
-            WolfDrive
-          </h1>
-          
-          <p class="text-base leading-relaxed text-gemini-subtext mb-6 transition-colors duration-200">
-            {{ message }}
-          </p>
-          
-          <button class="bg-[#4285F4] text-white px-6 py-3 rounded-full hover:bg-blue-600 transition-all font-medium cursor-pointer shadow-xs">
-            System Ready
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <!-- Top Bar: Search & View Toggles -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
+        
+        <!-- Search Bar -->
+        <div class="relative flex-1 max-w-lg">
+          <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search indexed files..."
+            class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors"
+          />
+        </div>
+
+        <!-- View Mode Switcher -->
+        <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1 self-end sm:self-auto">
+          <button
+            @click="viewMode = 'grid'"
+            class="p-2 rounded-lg transition-colors cursor-pointer"
+            :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+            title="Grid View"
+          >
+            <Grid class="h-4 w-4" />
+          </button>
+          <button
+            @click="viewMode = 'list'"
+            class="p-2 rounded-lg transition-colors cursor-pointer"
+            :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+            title="List View"
+          >
+            <ListIcon class="h-4 w-4" />
           </button>
         </div>
       </div>
+
+      <!-- Category Tabs -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
+        <button
+          v-for="cat in categories"
+          :key="cat.id"
+          @click="selectedCategory = cat.id"
+          class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
+          :class="[
+            selectedCategory === cat.id
+              ? 'bg-gemini-surface text-gemini-blue border border-gemini-blue/30 shadow-xs'
+              : 'bg-gemini-card border border-gemini-border text-gemini-subtext hover:text-gemini-text hover:border-gemini-subtext/40'
+          ]"
+        >
+          <component :is="cat.icon" class="h-4 w-4" />
+          <span>{{ cat.label }}</span>
+        </button>
+      </div>
+
+      <!-- Loading Skeleton -->
+      <div v-if="isLoading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div 
+          v-for="n in 10" 
+          :key="n"
+          class="bg-gemini-card border border-gemini-border rounded-xl p-4 h-36 animate-pulse"
+        ></div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="files.length === 0" class="text-center py-16 bg-gemini-card border border-dashed border-gemini-border rounded-3xl p-8">
+        <Filter class="h-10 w-10 text-gemini-subtext mx-auto mb-3 opacity-60" />
+        <h3 class="text-base font-semibold text-gemini-text">No files found</h3>
+        <p class="text-sm text-gemini-subtext mt-1">Try adjusting your search terms or scan additional folders in Settings.</p>
+      </div>
+
+      <!-- GRID VIEW -->
+      <div 
+        v-else-if="viewMode === 'grid'"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+      >
+        <div
+          v-for="file in files"
+          :key="file.id"
+          class="group bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
+        >
+          <!-- Thumbnail / Icon Header -->
+          <div class="h-24 w-full bg-gemini-surface rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
+            <component 
+              :is="getCategoryIcon(file.mediaCategory)" 
+              class="h-8 w-8 text-gemini-subtext group-hover:text-gemini-blue transition-colors"
+            />
+          </div>
+
+          <!-- File Info -->
+          <div class="min-w-0">
+            <span class="block text-sm font-medium text-gemini-text truncate" :title="file.filename">
+              {{ file.filename }}
+            </span>
+            <div class="flex items-center justify-between text-xs text-gemini-subtext mt-1">
+              <span class="uppercase font-mono text-[10px]">{{ file.extension }}</span>
+              <span>{{ formatBytes(file.sizeBytes) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIST VIEW -->
+      <div v-else class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border">
+        <div
+          v-for="file in files"
+          :key="file.id"
+          class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
+        >
+          <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-4">
+            <component 
+              :is="getCategoryIcon(file.mediaCategory)" 
+              class="h-5 w-5 text-gemini-blue shrink-0"
+            />
+            <div class="min-w-0 flex-1">
+              <span class="block text-sm font-medium text-gemini-text truncate">
+                {{ file.filename }}
+              </span>
+              <span class="block text-xs font-mono text-gemini-subtext truncate">
+                {{ file.relativePath }}
+              </span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-6 text-xs text-gemini-subtext shrink-0">
+            <span class="uppercase font-mono w-12 text-right">{{ file.extension }}</span>
+            <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 </template>
