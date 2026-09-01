@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Sidebar from '@/components/Sidebar.vue'
-import Navbar from '@/components/layout/Navbar.vue'
 </script>
 
 <template>
@@ -8,13 +7,9 @@ import Navbar from '@/components/layout/Navbar.vue'
     <!-- Shared Left Sidebar -->
     <Sidebar class="w-64 shrink-0 border-r border-gemini-border" />
 
-    <main class="flex min-w-0 flex-1 flex-col">
-      <Navbar />
-
-      <!-- Dynamic Main Content Area -->
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <slot />
-      </div>
+    <!-- Dynamic Main Content Area -->
+    <main class="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <slot />
     </main>
   </div>
 </template>
