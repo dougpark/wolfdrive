@@ -1,36 +1,30 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { MdPreview } from 'md-editor-v3'
-import 'md-editor-v3/lib/preview.css'
+import { onMounted, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
-import { Eye, FileText, Filter, Grid, List as ListIcon, Search, X } from 'lucide-vue-next'
+import { useFilePreview } from '@/composables/useFilePreview'
+import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
+import type { MediaFile } from '@/types/media'
+import { Eye, FileText, Filter, Grid, List as ListIcon, Search } from 'lucide-vue-next'
 
-interface DocumentFile {
-    id: string
-    filename: string
-    relativePath: string
-    extension: string
-    mimeType: string
-    sizeBytes: number
-}
-
-const files = ref<DocumentFile[]>([])
+const files = ref<MediaFile[]>([])
 const documentCount = ref(0)
 const isLoading = ref(true)
 const searchQuery = ref('')
 const viewMode = ref<'grid' | 'list'>('list')
-const previewFile = ref<DocumentFile | null>(null)
-const textContent = ref('')
-const isTextPreviewLoading = ref(false)
 const { isDark } = useTheme()
-
-function isTextFile(file: DocumentFile) {
-    return file.mimeType.startsWith('text/')
-        || ['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'].includes(file.extension.toLowerCase())
-}
-
-const isTextPreview = computed(() => previewFile.value ? isTextFile(previewFile.value) : false)
-const isMarkdownPreview = computed(() => ['md', 'markdown'].includes(previewFile.value?.extension.toLowerCase() || ''))
+const {
+    previewFile,
+    hasPrevious,
+    hasNext,
+    textContent,
+    isTextPreviewLoading,
+    isTextPreview,
+    isMarkdownPreview,
+    open: openPreview,
+    close: closePreview,
+    goNext,
+    goPrevious,
+} = useFilePreview()
 
 async function fetchStats() {
     try {
@@ -68,41 +62,10 @@ function formatBytes(bytes: number) {
     return `${parseFloat((bytes / Math.pow(1024, index)).toFixed(1))} ${sizes[index]}`
 }
 
-async function openPreview(file: DocumentFile) {
-    previewFile.value = file
-    textContent.value = ''
-    if (!isTextFile(file)) return
-
-    isTextPreviewLoading.value = true
-    try {
-        const response = await fetch(`/api/stream/${file.id}`)
-        if (!response.ok) throw new Error(`Preview request failed: ${response.status}`)
-        textContent.value = await response.text()
-    } catch (error) {
-        console.error('Failed to load document preview:', error)
-        textContent.value = 'Unable to load this file preview.'
-    } finally {
-        isTextPreviewLoading.value = false
-    }
-}
-
-function closePreview() {
-    previewFile.value = null
-    textContent.value = ''
-}
-
 let searchTimeout: ReturnType<typeof setTimeout>
 watch(searchQuery, () => {
     clearTimeout(searchTimeout)
     searchTimeout = setTimeout(fetchFiles, 300)
-})
-
-watch(previewFile, (file) => {
-    document.body.style.overflow = file ? 'hidden' : ''
-})
-
-onBeforeUnmount(() => {
-    document.body.style.overflow = ''
 })
 
 onMounted(() => {
@@ -138,7 +101,7 @@ onMounted(() => {
                 <span v-if="searchQuery.trim()">Found <strong class="font-semibold text-gemini-text">{{
                     files.length.toLocaleString() }}</strong> matching documents</span>
                 <span v-else>Showing <strong class="font-semibold text-gemini-text">{{ documentCount.toLocaleString()
-                        }}</strong> indexed documents</span>
+                }}</strong> indexed documents</span>
             </div>
 
             <div v-if="isLoading" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -154,7 +117,7 @@ onMounted(() => {
                 class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 <button v-for="file in files" :key="file.id" type="button"
                     class="group flex cursor-pointer flex-col justify-between rounded-xl border border-gemini-border bg-gemini-card p-4 text-left transition-all hover:border-gemini-blue hover:shadow-md"
-                    @click="openPreview(file)">
+                    @click="openPreview(file, files)">
                     <div class="mb-3 flex h-24 items-center justify-center rounded-lg bg-gemini-surface">
                         <FileText class="h-8 w-8 text-gemini-subtext group-hover:text-gemini-blue" />
                     </div>
@@ -169,45 +132,23 @@ onMounted(() => {
                     <div class="flex min-w-0 flex-1 items-center gap-3.5 pr-4">
                         <FileText class="h-5 w-5 shrink-0 text-gemini-blue" />
                         <div class="min-w-0"><span class="block truncate text-sm font-medium">{{ file.filename
-                                }}</span><span class="block truncate font-mono text-xs text-gemini-subtext">{{
-                                file.relativePath }}</span></div>
+                        }}</span><span class="block truncate font-mono text-xs text-gemini-subtext">{{
+                                    file.relativePath }}</span></div>
                     </div>
                     <div class="flex shrink-0 items-center gap-6 text-xs text-gemini-subtext"><span
                             class="w-12 text-right font-mono uppercase">{{ file.extension }}</span><span
                             class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span><button type="button"
                             class="-m-2 cursor-pointer rounded-lg p-2 hover:bg-gemini-card hover:text-gemini-blue"
-                            :title="`Preview ${file.filename}`" @click="openPreview(file)">
+                            :title="`Preview ${file.filename}`" @click="openPreview(file, files)">
                             <Eye class="h-4 w-4" />
                         </button></div>
                 </div>
             </div>
         </main>
 
-        <div v-if="previewFile" class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog"
-            aria-modal="true" :aria-label="`Preview ${previewFile.filename}`" @click.self="closePreview">
-            <section
-                class="flex h-[min(85vh,48rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-gemini-card shadow-lg">
-                <header class="flex items-center justify-between gap-4 border-b border-gemini-border px-6 py-4">
-                    <div class="min-w-0">
-                        <h2 class="truncate text-base font-semibold">{{ previewFile.filename }}</h2>
-                        <p class="truncate text-xs text-gemini-subtext">{{ previewFile.relativePath }}</p>
-                    </div><button type="button"
-                        class="cursor-pointer rounded-xl p-2 text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text"
-                        title="Close preview" @click="closePreview">
-                        <X class="h-5 w-5" />
-                    </button>
-                </header>
-                <div class="min-h-0 flex-1 bg-gemini-surface p-4">
-                    <div v-if="isMarkdownPreview" class="h-full overflow-auto overscroll-contain rounded-xl">
-                        <MdPreview :modelValue="textContent" :theme="isDark ? 'dark' : 'light'" />
-                    </div>
-                    <pre v-else-if="isTextPreview"
-                        class="h-full overflow-auto overscroll-contain rounded-xl bg-gemini-surface p-4 font-mono text-sm text-gemini-text whitespace-pre-wrap">{{ isTextPreviewLoading ? 'Loading preview...' : textContent }}</pre>
-                    <iframe v-else :src="`/api/stream/${previewFile.id}`" :title="previewFile.filename"
-                        class="h-full w-full rounded-xl border border-gemini-border bg-gemini-card"
-                        style="color-scheme: light"></iframe>
-                </div>
-            </section>
-        </div>
+        <FilePreviewOverlay v-if="previewFile" :file="previewFile" :is-dark="isDark" :is-markdown="isMarkdownPreview"
+            :is-text="isTextPreview" :is-text-loading="isTextPreviewLoading" :text-content="textContent"
+            :has-previous="hasPrevious" :has-next="hasNext" @close="closePreview" @previous="goPrevious"
+            @next="goNext" />
     </div>
 </template>

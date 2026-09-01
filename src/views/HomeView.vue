@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { MdPreview } from 'md-editor-v3'
-import 'md-editor-v3/lib/preview.css'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
+import { useFilePreview } from '@/composables/useFilePreview'
+import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
+import type { MediaFile } from '@/types/media'
 import {
   Search,
   Grid,
@@ -18,25 +19,11 @@ import {
   FileCode, // Icon for generic documents
   BookOpen, // Icon for PDFs
   Eye,
-  X
 } from 'lucide-vue-next'
-
-interface MediaFile {
-  id: string
-  filename: string
-  relativePath: string
-  extension: string
-  mimeType: string
-  mediaCategory: 'image' | 'video' | 'audio' | 'pdf' | 'epub' | 'document' | 'other'
-  sizeBytes: number
-  mtimeMs: number
-}
 
 const props = defineProps<{
   fixedCategory?: string
 }>()
-
-const EpubPreview = defineAsyncComponent(() => import('@/components/viewers/EpubPreview.vue'))
 
 const files = ref<MediaFile[]>([])
 const categoryCounts = ref<Record<string, number>>({})
@@ -44,10 +31,20 @@ const isLoading = ref(true)
 const searchQuery = ref('')
 const selectedCategory = ref(props.fixedCategory || 'all')
 const viewMode = ref<'grid' | 'list'>('list')
-const previewFile = ref<MediaFile | null>(null)
-const textContent = ref('')
-const isTextPreviewLoading = ref(false)
 const { isDark } = useTheme()
+const {
+  previewFile,
+  hasPrevious,
+  hasNext,
+  textContent,
+  isTextPreviewLoading,
+  isTextPreview,
+  isMarkdownPreview,
+  open: openPreview,
+  close: closePreview,
+  goNext,
+  goPrevious,
+} = useFilePreview()
 
 const categories = [
   { id: 'all', label: 'All Files', icon: HardDrive },
@@ -123,45 +120,6 @@ function getCategoryIcon(category: string) {
   }
 }
 
-const isTextPreview = computed(() => {
-  if (!previewFile.value) return false
-
-  return previewFile.value.mimeType.startsWith('text/')
-    || ['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'].includes(previewFile.value.extension.toLowerCase())
-})
-
-const isMarkdownPreview = computed(() => {
-  const extension = previewFile.value?.extension.toLowerCase()
-  return extension === 'md' || extension === 'markdown'
-})
-
-async function openPreview(file: MediaFile) {
-  previewFile.value = file
-  textContent.value = ''
-
-  const isTextFile = file.mimeType.startsWith('text/')
-    || ['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'].includes(file.extension.toLowerCase())
-
-  if (!isTextFile) return
-
-  isTextPreviewLoading.value = true
-  try {
-    const response = await fetch(`/api/stream/${file.id}`)
-    if (!response.ok) throw new Error(`Preview request failed: ${response.status}`)
-    textContent.value = await response.text()
-  } catch (err) {
-    console.error('Failed to load text preview:', err)
-    textContent.value = 'Unable to load this file preview.'
-  } finally {
-    isTextPreviewLoading.value = false
-  }
-}
-
-function closePreview() {
-  previewFile.value = null
-  textContent.value = ''
-}
-
 // Debounce search input
 let searchTimeout: ReturnType<typeof setTimeout>
 watch(searchQuery, () => {
@@ -170,14 +128,6 @@ watch(searchQuery, () => {
 })
 
 watch(selectedCategory, fetchFiles)
-
-watch(previewFile, (file) => {
-  document.body.style.overflow = file ? 'hidden' : ''
-})
-
-onBeforeUnmount(() => {
-  document.body.style.overflow = ''
-})
 
 onMounted(() => {
   fetchStats()
@@ -316,7 +266,7 @@ onMounted(() => {
             <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>
             <button type="button"
               class="p-2 -m-2 rounded-lg text-gemini-subtext hover:bg-gemini-card hover:text-gemini-blue transition-colors cursor-pointer"
-              :title="`Preview ${file.filename}`" @click.stop="openPreview(file)">
+              :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
               <Eye class="h-4 w-4" />
             </button>
           </div>
@@ -325,40 +275,8 @@ onMounted(() => {
 
     </main>
 
-    <div v-if="previewFile" class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog"
-      aria-modal="true" :aria-label="`Preview ${previewFile.filename}`" @click.self="closePreview">
-      <section
-        class="flex h-[min(85vh,48rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-gemini-card shadow-lg">
-        <header class="flex items-center justify-between gap-4 border-b border-gemini-border px-6 py-4">
-          <div class="min-w-0">
-            <h2 class="truncate text-base font-semibold text-gemini-text">{{ previewFile.filename }}</h2>
-            <p class="truncate text-xs text-gemini-subtext">{{ previewFile.relativePath }}</p>
-          </div>
-          <button type="button"
-            class="shrink-0 rounded-xl p-2 text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text transition-colors cursor-pointer"
-            title="Close preview" @click="closePreview">
-            <X class="h-5 w-5" />
-          </button>
-        </header>
-        <div class="min-h-0 flex-1 bg-gemini-surface p-4">
-          <img v-if="previewFile.mediaCategory === 'image'" :src="`/api/stream/${previewFile.id}`"
-            :alt="previewFile.filename" class="h-full w-full object-contain" />
-          <video v-else-if="previewFile.mediaCategory === 'video'" :src="`/api/stream/${previewFile.id}`" controls
-            class="h-full w-full"></video>
-          <audio v-else-if="previewFile.mediaCategory === 'audio'" :src="`/api/stream/${previewFile.id}`" controls
-            class="h-full w-full"></audio>
-          <div v-else-if="isMarkdownPreview" class="h-full overflow-auto overscroll-contain rounded-xl">
-            <MdPreview :modelValue="textContent" :theme="isDark ? 'dark' : 'light'" />
-          </div>
-          <pre v-else-if="isTextPreview"
-            class="h-full overflow-auto overscroll-contain rounded-xl bg-gemini-surface p-4 font-mono text-sm text-gemini-text whitespace-pre-wrap">{{ isTextPreviewLoading ? 'Loading preview...' : textContent }}</pre>
-          <EpubPreview v-else-if="previewFile.mediaCategory === 'epub'" :url="`/api/stream/${previewFile.id}`"
-            :isDark="isDark" />
-          <iframe v-else :src="`/api/stream/${previewFile.id}`" :title="previewFile.filename"
-            class="h-full w-full rounded-xl border border-gemini-border bg-gemini-card"
-            style="color-scheme: light"></iframe>
-        </div>
-      </section>
-    </div>
+    <FilePreviewOverlay v-if="previewFile" :file="previewFile" :is-dark="isDark" :is-markdown="isMarkdownPreview"
+      :is-text="isTextPreview" :is-text-loading="isTextPreviewLoading" :text-content="textContent"
+      :has-previous="hasPrevious" :has-next="hasNext" @close="closePreview" @previous="goPrevious" @next="goNext" />
   </div>
 </template>
