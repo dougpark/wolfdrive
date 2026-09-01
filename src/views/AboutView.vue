@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Navbar from '@/components/layout/Navbar.vue'
 import { useTheme } from '@/composables/useTheme'
 import { HardDrive, ShieldCheck, Cpu, Sparkles } from 'lucide-vue-next'
 
@@ -15,8 +14,6 @@ const logoSrc = computed(() =>
 
 <template>
   <div class="min-h-screen bg-gemini-bg text-gemini-text flex flex-col transition-colors duration-200">
-    <Navbar />
-
     <main class="flex-1 flex items-center justify-center p-6 sm:p-12">
       <div class="max-w-2xl w-full text-center">
         

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
-import Navbar from '@/components/layout/Navbar.vue'
 import {
   Palette,
   HardDrive,
@@ -180,9 +179,6 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen bg-gemini-bg text-gemini-text flex flex-col transition-colors duration-200">
-    <!-- Top Navbar -->
-    <Navbar />
-
     <!-- Settings Main Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header -->
