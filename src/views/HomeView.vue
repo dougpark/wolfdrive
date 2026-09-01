@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Navbar from '@/components/layout/Navbar.vue'
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
+import { useTheme } from '@/composables/useTheme'
 import {
   Search,
   Grid,
@@ -30,6 +33,8 @@ interface MediaFile {
   mtimeMs: number
 }
 
+const EpubPreview = defineAsyncComponent(() => import('@/components/viewers/EpubPreview.vue'))
+
 const files = ref<MediaFile[]>([])
 const categoryCounts = ref<Record<string, number>>({})
 const isLoading = ref(true)
@@ -39,6 +44,7 @@ const viewMode = ref<'grid' | 'list'>('list')
 const previewFile = ref<MediaFile | null>(null)
 const textContent = ref('')
 const isTextPreviewLoading = ref(false)
+const { isDark } = useTheme()
 
 const categories = [
   { id: 'all', label: 'All Files', icon: HardDrive },
@@ -122,6 +128,11 @@ const isTextPreview = computed(() => {
     || ['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'].includes(previewFile.value.extension.toLowerCase())
 })
 
+const isMarkdownPreview = computed(() => {
+  const extension = previewFile.value?.extension.toLowerCase()
+  return extension === 'md' || extension === 'markdown'
+})
+
 async function openPreview(file: MediaFile) {
   previewFile.value = file
   textContent.value = ''
@@ -158,6 +169,14 @@ watch(searchQuery, () => {
 
 watch(selectedCategory, () => {
   fetchFiles()
+})
+
+watch(previewFile, (file) => {
+  document.body.style.overflow = file ? 'hidden' : ''
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
 })
 
 onMounted(() => {
@@ -331,8 +350,13 @@ onMounted(() => {
             class="h-full w-full"></video>
           <audio v-else-if="previewFile.mediaCategory === 'audio'" :src="`/api/stream/${previewFile.id}`" controls
             class="h-full w-full"></audio>
+          <div v-else-if="isMarkdownPreview" class="h-full overflow-auto overscroll-contain rounded-xl">
+            <MdPreview :modelValue="textContent" :theme="isDark ? 'dark' : 'light'" />
+          </div>
           <pre v-else-if="isTextPreview"
-            class="h-full overflow-auto rounded-xl bg-gemini-surface p-4 font-mono text-sm text-gemini-text whitespace-pre-wrap">{{ isTextPreviewLoading ? 'Loading preview...' : textContent }}</pre>
+            class="h-full overflow-auto overscroll-contain rounded-xl bg-gemini-surface p-4 font-mono text-sm text-gemini-text whitespace-pre-wrap">{{ isTextPreviewLoading ? 'Loading preview...' : textContent }}</pre>
+          <EpubPreview v-else-if="previewFile.mediaCategory === 'epub'" :url="`/api/stream/${previewFile.id}`"
+            :isDark="isDark" />
           <iframe v-else :src="`/api/stream/${previewFile.id}`" :title="previewFile.filename"
             class="h-full w-full rounded-xl border border-gemini-border bg-gemini-card"
             style="color-scheme: light"></iframe>
