@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
 const isOpen = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
 const streamUrl = computed(() => `/api/stream/${encodeURIComponent(props.file.id)}`)
+const previewUrl = computed(() => `/preview/${encodeURIComponent(props.file.id)}`)
 
 function closeMenu() {
     isOpen.value = false
@@ -41,7 +42,7 @@ function downloadFile() {
 }
 
 function openInNewTab() {
-    window.open(streamUrl.value, '_blank', 'noopener,noreferrer')
+    window.open(previewUrl.value, '_blank', 'noopener,noreferrer')
     closeMenu()
 }
 

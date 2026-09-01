@@ -160,6 +160,24 @@ app.get('/api/files', async (c) => {
     return c.json(files)
 })
 
+// GET /api/files/:id - Fetch metadata for a single indexed file
+app.get('/api/files/:id', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+
+    const [file] = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId)))
+        .limit(1)
+
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    return c.json(file)
+})
+
 // GET /api/stream/:id - Stream an indexed file for browser previews
 app.get('/api/stream/:id', async (c) => {
     const userId = c.get('userId')
