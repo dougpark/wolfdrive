@@ -32,13 +32,17 @@ interface MediaFile {
   mtimeMs: number
 }
 
+const props = defineProps<{
+  fixedCategory?: string
+}>()
+
 const EpubPreview = defineAsyncComponent(() => import('@/components/viewers/EpubPreview.vue'))
 
 const files = ref<MediaFile[]>([])
 const categoryCounts = ref<Record<string, number>>({})
 const isLoading = ref(true)
 const searchQuery = ref('')
-const selectedCategory = ref('all')
+const selectedCategory = ref(props.fixedCategory || 'all')
 const viewMode = ref<'grid' | 'list'>('list')
 const previewFile = ref<MediaFile | null>(null)
 const textContent = ref('')
@@ -212,7 +216,7 @@ onMounted(() => {
       </div>
 
       <!-- Quick media-type filters for the physical Files view -->
-      <div class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+      <div v-if="!props.fixedCategory" class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
         <button v-for="category in categories" :key="category.id" type="button"
           class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all"
           :class="selectedCategory === category.id
