@@ -72,7 +72,8 @@ onMounted(() => {
                     class="h-full w-full"></video>
                 <audio v-else-if="props.file.mediaCategory === 'audio'" :src="`/api/stream/${props.file.id}`" controls
                     class="h-full w-full"></audio>
-                <div v-else-if="props.isMarkdown" class="h-full overflow-auto overscroll-contain rounded-xl">
+                <div v-else-if="props.isMarkdown"
+                    class="markdown-preview-shell h-full overflow-auto overscroll-contain rounded-xl border border-gemini-border bg-gemini-card p-6 shadow-sm md:p-8">
                     <MdPreview :modelValue="props.textContent" :theme="props.isDark ? 'dark' : 'light'" />
                 </div>
                 <pre v-else-if="props.isText"
@@ -86,3 +87,68 @@ onMounted(() => {
         </div>
     </div>
 </template>
+
+<style scoped>
+.markdown-preview-shell :deep(.md-editor),
+.markdown-preview-shell :deep(.md-editor-dark) {
+    --md-color: var(--color-gemini-text);
+    --md-hover-color: var(--color-gemini-text);
+    --md-bk-color: var(--color-gemini-card);
+    --md-bk-color-outstand: var(--color-gemini-surface);
+    --md-bk-hover-color: var(--color-gemini-surface);
+    --md-border-color: var(--color-gemini-border);
+    --md-border-hover-color: var(--color-gemini-border);
+    --md-border-active-color: var(--color-gemini-blue);
+    --md-scrollbar-bg-color: var(--color-gemini-surface);
+    --md-scrollbar-thumb-color: var(--color-gemini-border);
+    --md-scrollbar-thumb-hover-color: var(--color-gemini-subtext);
+    --md-scrollbar-thumb-active-color: var(--color-gemini-subtext);
+    min-height: 100%;
+    background-color: var(--color-gemini-card);
+    border: 0;
+    color: var(--color-gemini-text);
+    font-family: Inter, Roboto, sans-serif;
+}
+
+.markdown-preview-shell :deep(.md-editor-preview-wrapper) {
+    min-height: 100%;
+}
+
+.markdown-preview-shell :deep(.md-editor-preview) {
+    box-sizing: border-box;
+    max-width: 920px;
+    min-height: 100%;
+    padding: 0;
+    color: var(--color-gemini-text);
+    line-height: 1.6;
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+.markdown-preview-shell :deep(.md-editor-preview h1),
+.markdown-preview-shell :deep(.md-editor-preview h2),
+.markdown-preview-shell :deep(.md-editor-preview h3),
+.markdown-preview-shell :deep(.md-editor-preview h4),
+.markdown-preview-shell :deep(.md-editor-preview h5),
+.markdown-preview-shell :deep(.md-editor-preview h6) {
+    color: var(--color-gemini-text);
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.markdown-preview-shell :deep(.md-editor-preview p),
+.markdown-preview-shell :deep(.md-editor-preview li),
+.markdown-preview-shell :deep(.md-editor-preview blockquote) {
+    color: var(--color-gemini-text);
+}
+
+.markdown-preview-shell :deep(.md-editor-preview a) {
+    color: var(--color-gemini-blue);
+}
+
+.markdown-preview-shell :deep(.md-editor-preview code),
+.markdown-preview-shell :deep(.md-editor-preview pre) {
+    background-color: var(--color-gemini-surface);
+    color: var(--color-gemini-text);
+}
+</style>

@@ -36,6 +36,13 @@
       "when": 1788207971380,
       "tag": "0004_curious_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788303052821,
+      "tag": "0005_lonely_midnight",
+      "breakpoints": true
     }
   ]
 }

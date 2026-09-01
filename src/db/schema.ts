@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm'
 
 // 0. Core Media File Metadata
@@ -32,7 +32,9 @@ export const mediaDirectories = sqliteTable('media_directories', {
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     lastScannedAt: text('last_scanned_at'),
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
-})
+}, (table) => [
+    index('media_directories_user_id_idx').on(table.userId),
+])
 
 // 3. Media Files Table
 export const mediaFiles = sqliteTable('media_files', {
@@ -48,7 +50,11 @@ export const mediaFiles = sqliteTable('media_files', {
     sizeBytes: integer('size_bytes').notNull(),
     mtimeMs: integer('mtime_ms').notNull(),
     indexedAt: text('indexed_at').default(sql`CURRENT_TIMESTAMP`),
-})
+}, (table) => [
+    index('media_files_user_mtime_idx').on(table.userId, table.mtimeMs),
+    index('media_files_user_category_mtime_idx').on(table.userId, table.mediaCategory, table.mtimeMs),
+    index('media_files_user_directory_category_idx').on(table.userId, table.directoryId, table.mediaCategory),
+])
 
 // app_settings table for storing application-wide settings, such as ignore patterns, scan intervals, etc.
 export const appSettings = sqliteTable('app_settings', {
