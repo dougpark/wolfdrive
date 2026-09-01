@@ -17,6 +17,7 @@ scanAllUserDirectories('usr_default')
 // Run with `bun run src/scripts/scan.ts` to scan all user directories and index media files.
 
 /*
+Aug 31, 2026
 bun run src/scripts/scan.ts
 🔍 Starting local media scan...
 ✅ Scan completed in 50.94s: 12767 files indexed/updated, 10882 unchanged.
