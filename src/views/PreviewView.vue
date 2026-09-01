@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
@@ -11,6 +11,7 @@ const router = useRouter()
 const { isDark } = useTheme()
 const isLoading = ref(true)
 const errorMessage = ref('')
+const originalTitle = document.title
 const {
     previewFile,
     hasPrevious,
@@ -33,9 +34,11 @@ async function loadPreview() {
         if (!response.ok) throw new Error(`Preview metadata request failed: ${response.status}`)
 
         const file = await response.json() as MediaFile
+        document.title = file.filename
         openPreview(file, [file])
     } catch (error) {
         console.error('Failed to load preview:', error)
+        document.title = 'Preview unavailable'
         errorMessage.value = 'Unable to load this file preview.'
     } finally {
         isLoading.value = false
@@ -49,6 +52,10 @@ function closePreviewTab() {
 }
 
 onMounted(loadPreview)
+
+onBeforeUnmount(() => {
+    document.title = originalTitle
+})
 </script>
 
 <template>
