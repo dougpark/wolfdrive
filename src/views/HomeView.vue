@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
+import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import type { MediaFile } from '@/types/media'
 import {
@@ -263,7 +264,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="flex items-center gap-6 text-xs text-gemini-subtext shrink-0">
+          <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
             <span class="uppercase font-mono w-12 text-right">{{ file.extension }}</span>
             <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>
             <button type="button"
@@ -271,6 +272,7 @@ onMounted(() => {
               :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
               <Eye class="h-4 w-4" />
             </button>
+            <FileActionsMenu :file="file" />
           </div>
         </div>
       </div>

@@ -1,0 +1,87 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Download, ExternalLink, MoreVertical } from 'lucide-vue-next'
+import type { MediaFile } from '@/types/media'
+
+const props = withDefaults(defineProps<{
+    file: MediaFile
+    align?: 'left' | 'right'
+}>(), {
+    align: 'right',
+})
+
+const isOpen = ref(false)
+const rootEl = ref<HTMLElement | null>(null)
+const streamUrl = computed(() => `/api/stream/${encodeURIComponent(props.file.id)}`)
+
+function closeMenu() {
+    isOpen.value = false
+}
+
+function toggleMenu() {
+    isOpen.value = !isOpen.value
+}
+
+function handleDocumentClick(event: MouseEvent) {
+    if (!rootEl.value?.contains(event.target as Node)) closeMenu()
+}
+
+function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeMenu()
+}
+
+function downloadFile() {
+    const link = document.createElement('a')
+    link.href = streamUrl.value
+    link.download = props.file.filename
+    document.body.append(link)
+    link.click()
+    link.remove()
+    closeMenu()
+}
+
+function openInNewTab() {
+    window.open(streamUrl.value, '_blank', 'noopener,noreferrer')
+    closeMenu()
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleDocumentClick)
+    document.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClick)
+    document.removeEventListener('keydown', handleKeydown)
+})
+</script>
+
+<template>
+    <div ref="rootEl" class="relative inline-flex" @click.stop @dblclick.stop>
+        <button type="button"
+            class="cursor-pointer rounded-lg p-2 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-blue"
+            :aria-expanded="isOpen" :aria-label="`Actions for ${props.file.filename}`" title="File actions"
+            @click="toggleMenu">
+            <slot name="trigger" :is-open="isOpen">
+                <MoreVertical class="h-4 w-4" />
+            </slot>
+        </button>
+
+        <div v-if="isOpen"
+            class="absolute top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-gemini-border bg-gemini-card py-1 text-sm text-gemini-text shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+            :class="props.align === 'right' ? 'right-0' : 'left-0'" role="menu">
+            <button type="button"
+                class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                role="menuitem" @click="downloadFile">
+                <Download class="h-4 w-4 text-gemini-subtext" />
+                <span>Download</span>
+            </button>
+            <button type="button"
+                class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                role="menuitem" @click="openInNewTab">
+                <ExternalLink class="h-4 w-4 text-gemini-subtext" />
+                <span>Open in new tab</span>
+            </button>
+        </div>
+    </div>
+</template>

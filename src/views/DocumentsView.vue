@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
+import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import type { MediaFile } from '@/types/media'
 import { Eye, FileText, Filter, Grid, List as ListIcon, Search } from 'lucide-vue-next'
@@ -101,7 +102,7 @@ onMounted(() => {
                 <span v-if="searchQuery.trim()">Found <strong class="font-semibold text-gemini-text">{{
                     files.length.toLocaleString() }}</strong> matching documents</span>
                 <span v-else>Showing <strong class="font-semibold text-gemini-text">{{ documentCount.toLocaleString()
-                        }}</strong> indexed documents</span>
+                }}</strong> indexed documents</span>
             </div>
 
             <div v-if="isLoading" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -133,16 +134,18 @@ onMounted(() => {
                     <div class="flex min-w-0 flex-1 items-center gap-3.5 pr-4">
                         <FileText class="h-5 w-5 shrink-0 text-gemini-blue" />
                         <div class="min-w-0"><span class="block truncate text-sm font-medium">{{ file.filename
-                                }}</span><span class="block truncate font-mono text-xs text-gemini-subtext">{{
+                        }}</span><span class="block truncate font-mono text-xs text-gemini-subtext">{{
                                     file.relativePath }}</span></div>
                     </div>
-                    <div class="flex shrink-0 items-center gap-6 text-xs text-gemini-subtext"><span
+                    <div class="flex shrink-0 items-center gap-4 text-xs text-gemini-subtext"><span
                             class="w-12 text-right font-mono uppercase">{{ file.extension }}</span><span
                             class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span><button type="button"
                             class="-m-2 cursor-pointer rounded-lg p-2 hover:bg-gemini-card hover:text-gemini-blue"
                             :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
                             <Eye class="h-4 w-4" />
-                        </button></div>
+                        </button>
+                        <FileActionsMenu :file="file" />
+                    </div>
                 </div>
             </div>
         </main>

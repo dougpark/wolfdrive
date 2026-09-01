@@ -3,6 +3,7 @@ import { defineAsyncComponent, onMounted, ref } from 'vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { ChevronLeft, ChevronRight, X } from 'lucide-vue-next'
+import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
 import type { MediaFile } from '@/types/media'
 
 const EpubPreview = defineAsyncComponent(() => import('@/components/viewers/EpubPreview.vue'))
@@ -46,11 +47,14 @@ onMounted(() => {
                 <h2 class="truncate text-base font-semibold">{{ props.file.filename }}</h2>
                 <p class="truncate text-xs text-gemini-subtext">{{ props.file.relativePath }}</p>
             </div>
-            <button type="button"
-                class="shrink-0 cursor-pointer rounded-xl p-2 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
-                title="Close preview" @click="emit('close')">
-                <X class="h-5 w-5" />
-            </button>
+            <div class="flex shrink-0 items-center gap-1">
+                <FileActionsMenu :file="props.file" />
+                <button type="button"
+                    class="cursor-pointer rounded-xl p-2 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
+                    title="Close preview" @click="emit('close')">
+                    <X class="h-5 w-5" />
+                </button>
+            </div>
         </header>
 
         <div class="relative min-h-0 flex-1 bg-gemini-surface">
