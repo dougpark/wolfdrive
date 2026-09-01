@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTheme } from '@/composables/useTheme'
 import {
     Folder,
     Image,
@@ -12,6 +14,13 @@ import {
 } from 'lucide-vue-next'
 
 const route = useRoute()
+const { isDark } = useTheme()
+
+const logoSrc = computed(() =>
+    isDark.value
+        ? '/assets/wolfdrive_logo_dark.png'
+        : '/assets/wolfdrive_logo_lite.png'
+)
 
 const categories = [
     { name: 'Files', path: '/files', icon: Folder },
@@ -31,7 +40,7 @@ const categories = [
     <aside class="bg-gemini-card p-4 flex flex-col gap-6">
         <!-- Logo / Brand -->
         <div class="flex items-center gap-3 px-3 py-2">
-            <div class="h-8 w-8 bg-gemini-blue rounded-xl flex items-center justify-center font-bold text-white">W</div>
+            <img :src="logoSrc" alt="WolfDrive" class="h-8 w-8 object-contain" />
             <span class="font-semibold text-lg tracking-tight">WolfDrive</span>
         </div>
 

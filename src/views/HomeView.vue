@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import Navbar from '@/components/layout/Navbar.vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { useTheme } from '@/composables/useTheme'
@@ -39,7 +38,7 @@ const files = ref<MediaFile[]>([])
 const categoryCounts = ref<Record<string, number>>({})
 const isLoading = ref(true)
 const searchQuery = ref('')
-const selectedCategory = ref<string>('all')
+const selectedCategory = ref('all')
 const viewMode = ref<'grid' | 'list'>('list')
 const previewFile = ref<MediaFile | null>(null)
 const textContent = ref('')
@@ -51,8 +50,8 @@ const categories = [
   { id: 'image', label: 'Photos', icon: ImageIcon },
   { id: 'video', label: 'Videos', icon: Film },
   { id: 'audio', label: 'Music', icon: Music },
-  { id: 'pdf', label: 'PDFs', icon: BookOpen },          // Dedicated PDF tab
-  { id: 'epub', label: 'eBooks', icon: Book },           // Dedicated EPUB tab
+  { id: 'pdf', label: 'PDFs', icon: BookOpen },
+  { id: 'epub', label: 'eBooks', icon: Book },
   { id: 'document', label: 'Documents', icon: FileText },
 ]
 
@@ -94,19 +93,18 @@ function formatBytes(bytes: number) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-function formatCount(num: number | undefined) {
-  if (!num) return '0'
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'k'
-  return num.toLocaleString()
-}
-
 const totalFileCount = computed(() => {
   return Object.values(categoryCounts.value).reduce((a, b) => a + b, 0)
 })
 
-function getCategoryCount(catId: string) {
-  if (catId === 'all') return totalFileCount.value
-  return categoryCounts.value[catId] || 0
+function formatCount(count: number | undefined) {
+  if (!count) return '0'
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`
+  return count.toLocaleString()
+}
+
+function getCategoryCount(categoryId: string) {
+  return categoryId === 'all' ? totalFileCount.value : categoryCounts.value[categoryId]
 }
 
 function getCategoryIcon(category: string) {
@@ -167,9 +165,7 @@ watch(searchQuery, () => {
   searchTimeout = setTimeout(() => fetchFiles(), 300)
 })
 
-watch(selectedCategory, () => {
-  fetchFiles()
-})
+watch(selectedCategory, fetchFiles)
 
 watch(previewFile, (file) => {
   document.body.style.overflow = file ? 'hidden' : ''
@@ -186,10 +182,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gemini-bg text-gemini-text flex flex-col transition-colors duration-200">
-    <Navbar />
-
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="bg-gemini-bg text-gemini-text transition-colors duration-200">
+    <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
       <!-- Top Bar: Search & View Toggles -->
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
@@ -217,20 +211,19 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Category Tabs -->
-      <div class="flex items-center gap-2 overflow-x-auto pb-4 mb-3 no-scrollbar">
-        <button v-for="cat in categories" :key="cat.id" @click="selectedCategory = cat.id"
-          class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
-          :class="[
-            selectedCategory === cat.id
-              ? 'bg-gemini-surface text-gemini-blue border border-gemini-blue/30 shadow-xs'
-              : 'bg-gemini-card border border-gemini-border text-gemini-subtext hover:text-gemini-text hover:border-gemini-subtext/40'
-          ]">
-          <component :is="cat.icon" class="h-4 w-4" />
-          <span>{{ cat.label }}</span>
-          <span class="text-xs px-1.5 py-0.5 rounded-md font-mono transition-colors"
-            :class="selectedCategory === cat.id ? 'bg-gemini-blue/15 text-gemini-blue font-semibold' : 'bg-gemini-surface/80 text-gemini-subtext/70'">
-            {{ formatCount(getCategoryCount(cat.id)) }}
+      <!-- Quick media-type filters for the physical Files view -->
+      <div class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+        <button v-for="category in categories" :key="category.id" type="button"
+          class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all"
+          :class="selectedCategory === category.id
+            ? 'border border-gemini-blue/30 bg-gemini-surface text-gemini-blue shadow-xs'
+            : 'border border-gemini-border bg-gemini-card text-gemini-subtext hover:border-gemini-subtext/40 hover:text-gemini-text'"
+          @click="selectedCategory = category.id">
+          <component :is="category.icon" class="h-4 w-4" />
+          <span>{{ category.label }}</span>
+          <span class="rounded-md px-1.5 py-0.5 font-mono text-xs transition-colors"
+            :class="selectedCategory === category.id ? 'bg-gemini-blue/15 font-semibold text-gemini-blue' : 'bg-gemini-surface/80 text-gemini-subtext/70'">
+            {{ formatCount(getCategoryCount(category.id)) }}
           </span>
         </button>
       </div>

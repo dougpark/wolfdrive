@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useTheme } from './composables/useTheme'
+import AppLayout from '@/components/layout/AppLayout.vue'
 
 const { initTheme } = useTheme()
 
@@ -9,7 +10,7 @@ onMounted(() => {
 })
 </script>
 <template>
-  <div class="min-h-screen bg-gemini-bg text-gemini-text transition-colors duration-200">
+  <AppLayout>
     <router-view />
-  </div>
+  </AppLayout>
 </template>
