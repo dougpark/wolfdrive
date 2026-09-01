@@ -101,7 +101,7 @@ onMounted(() => {
                 <span v-if="searchQuery.trim()">Found <strong class="font-semibold text-gemini-text">{{
                     files.length.toLocaleString() }}</strong> matching documents</span>
                 <span v-else>Showing <strong class="font-semibold text-gemini-text">{{ documentCount.toLocaleString()
-                }}</strong> indexed documents</span>
+                        }}</strong> indexed documents</span>
             </div>
 
             <div v-if="isLoading" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -117,7 +117,7 @@ onMounted(() => {
                 class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 <button v-for="file in files" :key="file.id" type="button"
                     class="group flex cursor-pointer flex-col justify-between rounded-xl border border-gemini-border bg-gemini-card p-4 text-left transition-all hover:border-gemini-blue hover:shadow-md"
-                    @click="openPreview(file, files)">
+                    @dblclick="openPreview(file, files)">
                     <div class="mb-3 flex h-24 items-center justify-center rounded-lg bg-gemini-surface">
                         <FileText class="h-8 w-8 text-gemini-subtext group-hover:text-gemini-blue" />
                     </div>
@@ -128,18 +128,19 @@ onMounted(() => {
             <div v-else
                 class="divide-y divide-gemini-border overflow-hidden rounded-2xl border border-gemini-border bg-gemini-card">
                 <div v-for="file in files" :key="file.id"
-                    class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60">
+                    class="flex cursor-pointer items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60"
+                    @dblclick="openPreview(file, files)">
                     <div class="flex min-w-0 flex-1 items-center gap-3.5 pr-4">
                         <FileText class="h-5 w-5 shrink-0 text-gemini-blue" />
                         <div class="min-w-0"><span class="block truncate text-sm font-medium">{{ file.filename
-                        }}</span><span class="block truncate font-mono text-xs text-gemini-subtext">{{
+                                }}</span><span class="block truncate font-mono text-xs text-gemini-subtext">{{
                                     file.relativePath }}</span></div>
                     </div>
                     <div class="flex shrink-0 items-center gap-6 text-xs text-gemini-subtext"><span
                             class="w-12 text-right font-mono uppercase">{{ file.extension }}</span><span
                             class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span><button type="button"
                             class="-m-2 cursor-pointer rounded-lg p-2 hover:bg-gemini-card hover:text-gemini-blue"
-                            :title="`Preview ${file.filename}`" @click="openPreview(file, files)">
+                            :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
                             <Eye class="h-4 w-4" />
                         </button></div>
                 </div>

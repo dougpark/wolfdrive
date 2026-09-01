@@ -1,5 +1,5 @@
-x
 # CLAUDE.md
+
 ## Project Overview
 WolfDrive is a self-hosted, all-inclusive local media manager running in Docker on an Ubuntu server. It scans local file trees, indexes metadata in SQLite, runs midnight rescans, and presents a modern Google Drive-style web dashboard with dynamic plugin viewers for photos, videos, audio, eBooks, PDFs, Markdown, and office docs.
 ## Tech Stack & Runtime Constraints

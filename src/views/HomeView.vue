@@ -223,7 +223,8 @@ onMounted(() => {
       <!-- GRID VIEW -->
       <div v-else-if="viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div v-for="file in files" :key="file.id"
-          class="group bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between">
+          class="group bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
+          @dblclick="openPreview(file, files)">
           <!-- Thumbnail / Icon Header -->
           <div
             class="h-24 w-full bg-gemini-surface rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
@@ -248,7 +249,8 @@ onMounted(() => {
       <div v-else
         class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border">
         <div v-for="file in files" :key="file.id"
-          class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer">
+          class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
+          @dblclick="openPreview(file, files)">
           <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-4">
             <component :is="getCategoryIcon(file.mediaCategory)" class="h-5 w-5 text-gemini-blue shrink-0" />
             <div class="min-w-0 flex-1">
