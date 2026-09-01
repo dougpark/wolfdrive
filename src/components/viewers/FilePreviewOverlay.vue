@@ -74,7 +74,8 @@ onMounted(() => {
                     class="h-full w-full"></audio>
                 <div v-else-if="props.isMarkdown"
                     class="markdown-preview-shell h-full overflow-auto overscroll-contain rounded-xl border border-gemini-border bg-gemini-card p-6 shadow-sm md:p-8">
-                    <MdPreview :modelValue="props.textContent" :theme="props.isDark ? 'dark' : 'light'" />
+                    <MdPreview :modelValue="props.textContent" previewTheme="github"
+                        :theme="props.isDark ? 'dark' : 'light'" />
                 </div>
                 <pre v-else-if="props.isText"
                     class="h-full overflow-auto overscroll-contain rounded-xl bg-gemini-surface p-4 font-mono text-sm text-gemini-text whitespace-pre-wrap">{{ props.isTextLoading ? 'Loading preview...' : props.textContent }}</pre>

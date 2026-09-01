@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
-import { eq, and, like, sql } from 'drizzle-orm'
+import { eq, and, like, or, sql } from 'drizzle-orm'
 import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
@@ -138,8 +138,16 @@ app.get('/api/files', async (c) => {
         conditions.push(eq(mediaFiles.mediaCategory, category))
     }
 
-    if (search) {
-        conditions.push(like(mediaFiles.filename, `%${search}%`))
+    const trimmedSearch = search?.trim()
+    if (trimmedSearch) {
+        const searchPattern = `%${trimmedSearch}%`
+        const searchCondition = or(
+            like(mediaFiles.filename, searchPattern),
+            like(mediaFiles.relativePath, searchPattern),
+            like(mediaFiles.path, searchPattern),
+        )
+
+        if (searchCondition) conditions.push(searchCondition)
     }
 
     const files = await db
