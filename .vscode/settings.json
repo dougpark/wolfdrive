@@ -10,5 +10,8 @@
   
   // 3. Keep HTML formatting rules aligned with Tailwind and Vue template standards
   "vetur.format.defaultFormatter.html": "js-beautify-html", // If legacy Vetur exists
-  "vue.inlayHints.missingProps": true
+  "vue.inlayHints.missingProps": true,
+  "chat.tools.terminal.autoApprove": {
+    "bun": true
+  }
 }

@@ -36,15 +36,6 @@ app.get('/api/hello', (c) => {
 // Add future backend API endpoints here
 // app.get('/api/files', ...)
 
-// 2. Serve Static Frontend Assets (JS, CSS, images from Vite build)
-app.use('/*', serveStatic({ root: './dist' }))
-
-// 3. SPA Fallback Routing
-// If a user visits /swatches directly in their browser, Hono serves index.html
-// so Vue Router can load the correct view on the client side.
-app.get('*', serveStatic({ path: './dist/index.html' }))
-
-
 // GET /api/directories - Fetch user directories with aggregated stats
 app.get('/api/directories', async (c) => {
     const userId = c.get('userId')
@@ -161,6 +152,33 @@ app.get('/api/files', async (c) => {
     return c.json(files)
 })
 
+// GET /api/stream/:id - Stream an indexed file for browser previews
+app.get('/api/stream/:id', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const [file] = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId)))
+        .limit(1)
+
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    const diskFile = Bun.file(file.path)
+    if (!(await diskFile.exists())) {
+        return c.json({ error: 'File is no longer available' }, 404)
+    }
+
+    return new Response(diskFile, {
+        headers: {
+            'Content-Type': file.mimeType || 'application/octet-stream',
+            'Content-Disposition': `inline; filename="${file.filename.replaceAll('"', '')}"`,
+        },
+    })
+})
+
 // GET /api/stats - Fetch count breakdown across categories
 app.get('/api/stats', async (c) => {
     const userId = c.get('userId')
@@ -232,6 +250,12 @@ app.post('/api/settings/ignore', async (c) => {
 
     return c.json({ success: true, patterns })
 })
+
+// Serve Static Frontend Assets (JS, CSS, images from Vite build)
+app.use('/*', serveStatic({ root: './dist' }))
+
+// SPA fallback: Vue Router resolves routes after serving the application shell.
+app.get('*', serveStatic({ path: './dist/index.html' }))
 
 export default {
     port: Number(process.env.PORT) || 3005,
