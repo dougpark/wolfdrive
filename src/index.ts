@@ -31,6 +31,12 @@ function canAttachFileContent(file: typeof mediaFiles.$inferSelect) {
     return file.mimeType?.startsWith('text/') || AI_TEXT_EXTENSIONS.has(file.extension.toLowerCase())
 }
 
+/** Headers only accept ISO-8859-1, so non-ASCII names need the RFC 5987 `filename*` form. */
+function contentDisposition(filename: string, disposition: 'inline' | 'attachment' = 'inline') {
+    const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replaceAll('"', '')
+    return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
 async function buildFileAttachment(fileId: string, userId: string) {
     const [file] = await db
         .select()
@@ -309,7 +315,7 @@ app.get('/api/stream/:id', async (c) => {
     return new Response(diskFile, {
         headers: {
             'Content-Type': file.mimeType || 'application/octet-stream',
-            'Content-Disposition': `inline; filename="${file.filename.replaceAll('"', '')}"`,
+            'Content-Disposition': contentDisposition(file.filename),
         },
     })
 })
