@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
-import { eq, and, like, or, sql } from 'drizzle-orm'
+import { eq, and, like, or, sql, inArray } from 'drizzle-orm'
 import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
@@ -216,15 +216,23 @@ app.post('/api/scan/:id', async (c) => {
 // GET /api/files - Fetch indexed media files
 app.get('/api/files', async (c) => {
     const userId = c.get('userId')
-    const category = c.req.query('category') // 'image' | 'video' | 'audio' | 'document'
+    // Comma-separated list, e.g. 'document,pdf'
+    const category = c.req.query('category')
     const search = c.req.query('search')
     const limitParam = c.req.query('limit')
     const limit = limitParam ? parseInt(limitParam) : 1000
 
     let conditions = [eq(mediaFiles.userId, userId)]
 
-    if (category && category !== 'all') {
-        conditions.push(eq(mediaFiles.mediaCategory, category))
+    const requestedCategories = (category ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0 && value !== 'all')
+
+    if (requestedCategories.length === 1) {
+        conditions.push(eq(mediaFiles.mediaCategory, requestedCategories[0]!))
+    } else if (requestedCategories.length > 1) {
+        conditions.push(inArray(mediaFiles.mediaCategory, requestedCategories))
     }
 
     const trimmedSearch = search?.trim()

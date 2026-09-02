@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import LibraryView from '@/views/LibraryView.vue'
+import FileBrowser from '@/components/drive/FileBrowser.vue'
 </script>
 
 <template>
-    <LibraryView title="TV Shows" description="Your television library." />
+    <FileBrowser library="tv-shows" />
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import HomeView from '@/views/HomeView.vue'
+import FileBrowser from '@/components/drive/FileBrowser.vue'
 </script>
 
 <template>
-    <HomeView />
+    <FileBrowser library="files" />
 </template>
