@@ -96,6 +96,17 @@ function formatBytes(bytes: number) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+})
+
+function formatDate(mtimeMs: number) {
+    if (!mtimeMs) return '—'
+    return dateFormatter.format(new Date(mtimeMs))
+}
+
 function formatCount(count: number | undefined) {
     if (!count) return '0'
     if (count >= 1000) return `${(count / 1000).toFixed(1)}k`
@@ -183,7 +194,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="activeCategories.length"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -264,6 +275,7 @@ onMounted(() => {
 
                     <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
                         <span class="uppercase font-mono w-12 text-right">{{ file.extension }}</span>
+                        <span class="hidden sm:block w-24 text-right">{{ formatDate(file.mtimeMs) }}</span>
                         <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>
                         <button type="button"
                             class="p-2 -m-2 rounded-lg text-gemini-subtext hover:bg-gemini-card hover:text-gemini-blue transition-colors cursor-pointer"
