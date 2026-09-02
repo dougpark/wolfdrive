@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
 import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
@@ -11,7 +11,7 @@ import {
     getCategoryIcon,
     type LibraryCategoryId,
 } from '@/config/libraryCategories'
-import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown } from 'lucide-vue-next'
+import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ library?: LibraryCategoryId }>(), {
     library: 'files',
@@ -145,6 +145,16 @@ watch(searchQuery, () => {
     searchTimeout = setTimeout(() => fetchFiles(), 300)
 })
 
+function clearSearch() {
+    if (!searchQuery.value) return
+    searchQuery.value = ''
+    // Cancel the debounce the watcher just queued so the refetch is immediate.
+    nextTick(() => {
+        clearTimeout(searchTimeout)
+        fetchFiles()
+    })
+}
+
 watch(
     () => props.library,
     () => {
@@ -165,18 +175,26 @@ onMounted(() => {
     <div class="bg-gemini-bg text-gemini-text transition-colors duration-200">
         <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
-            <header v-if="showHeader" class="mb-6">
-                <h1 class="text-2xl font-semibold tracking-tight text-gemini-text">{{ library.label }}</h1>
-                <p class="mt-1 text-sm leading-relaxed text-gemini-subtext">{{ library.description }}</p>
-            </header>
-
-            <!-- Top Bar: Search & View Toggles -->
+            <!-- Top Bar: Title, Search & View Toggles -->
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
 
-                <div class="relative flex-1 max-w-lg">
-                    <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
-                    <input v-model="searchQuery" type="text" :placeholder="`Search ${library.label.toLowerCase()}...`"
-                        class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors" />
+                <div class="flex flex-1 items-center gap-4 min-w-0">
+                    <h1 v-if="showHeader" class="shrink-0 text-xl font-semibold tracking-tight text-gemini-text">
+                        {{ library.label }}
+                    </h1>
+
+                    <div class="relative flex-1 max-w-lg">
+                        <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
+                        <input v-model="searchQuery" type="text"
+                            :placeholder="`Search ${library.label.toLowerCase()}...`"
+                            class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors"
+                            @keydown.esc="clearSearch" />
+                        <button v-if="searchQuery" type="button" aria-label="Clear search" title="Clear search"
+                            class="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg p-1 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
+                            @click="clearSearch">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
                 </div>
 
                 <div
