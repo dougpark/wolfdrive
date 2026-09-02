@@ -54,6 +54,13 @@ export const mediaFiles = sqliteTable('media_files', {
     index('media_files_user_mtime_idx').on(table.userId, table.mtimeMs),
     index('media_files_user_category_mtime_idx').on(table.userId, table.mediaCategory, table.mtimeMs),
     index('media_files_user_directory_category_idx').on(table.userId, table.directoryId, table.mediaCategory),
+    // Sort support for the file browser columns (Name / Type / Size), filtered and unfiltered.
+    index('media_files_user_filename_idx').on(table.userId, table.filename),
+    index('media_files_user_extension_idx').on(table.userId, table.extension),
+    index('media_files_user_size_idx').on(table.userId, table.sizeBytes),
+    index('media_files_user_category_filename_idx').on(table.userId, table.mediaCategory, table.filename),
+    index('media_files_user_category_extension_idx').on(table.userId, table.mediaCategory, table.extension),
+    index('media_files_user_category_size_idx').on(table.userId, table.mediaCategory, table.sizeBytes),
 ])
 
 // app_settings table for storing application-wide settings, such as ignore patterns, scan intervals, etc.

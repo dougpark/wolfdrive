@@ -43,6 +43,13 @@
       "when": 1788303052821,
       "tag": "0005_lonely_midnight",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788383258802,
+      "tag": "0006_silent_azazel",
+      "breakpoints": true
     }
   ]
 }

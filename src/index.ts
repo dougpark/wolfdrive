@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
-import { eq, and, like, or, sql, inArray } from 'drizzle-orm'
+import { eq, and, like, or, sql, inArray, asc } from 'drizzle-orm'
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
@@ -17,6 +18,14 @@ const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
 const MODEL_NAME = 'gemma4:e4b'
 const AI_ATTACHMENT_MAX_BYTES = 200_000
 const AI_TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'])
+
+/** Whitelist of sortable columns for GET /api/files. */
+const FILE_SORT_COLUMNS: Record<string, AnySQLiteColumn> = {
+    name: mediaFiles.filename,
+    type: mediaFiles.extension,
+    modified: mediaFiles.mtimeMs,
+    size: mediaFiles.sizeBytes,
+}
 
 function canAttachFileContent(file: typeof mediaFiles.$inferSelect) {
     return file.mimeType?.startsWith('text/') || AI_TEXT_EXTENSIONS.has(file.extension.toLowerCase())
@@ -247,11 +256,14 @@ app.get('/api/files', async (c) => {
         if (searchCondition) conditions.push(searchCondition)
     }
 
+    const sortColumn = FILE_SORT_COLUMNS[c.req.query('sort') ?? ''] ?? mediaFiles.mtimeMs
+    const sortDirection = c.req.query('dir') === 'asc' ? 'asc' : 'desc'
+
     const files = await db
         .select()
         .from(mediaFiles)
         .where(and(...conditions))
-        .orderBy(desc(mediaFiles.mtimeMs))
+        .orderBy(sortDirection === 'asc' ? asc(sortColumn) : desc(sortColumn))
         .limit(limit)
 
     return c.json(files)

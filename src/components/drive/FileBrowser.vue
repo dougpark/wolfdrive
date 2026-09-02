@@ -11,11 +11,19 @@ import {
     getCategoryIcon,
     type LibraryCategoryId,
 } from '@/config/libraryCategories'
-import { Search, Grid, List as ListIcon, Filter, Eye } from 'lucide-vue-next'
+import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ library?: LibraryCategoryId }>(), {
     library: 'files',
 })
+
+type SortKey = 'name' | 'type' | 'modified' | 'size'
+
+const SORT_COLUMNS: { key: SortKey; label: string; class: string }[] = [
+    { key: 'type', label: 'Type', class: 'w-12 text-right' },
+    { key: 'modified', label: 'Date Modified', class: 'hidden sm:block w-24 text-right' },
+    { key: 'size', label: 'Size', class: 'w-20 text-right' },
+]
 
 const library = computed(() => LIBRARY_CATEGORIES[props.library])
 /** The Files view is unfiltered, so it gets the media-type filter chips. */
@@ -28,6 +36,8 @@ const isLoading = ref(true)
 const searchQuery = ref('')
 const selectedFilter = ref<string>('all')
 const viewMode = ref<'grid' | 'list'>('list')
+const sortKey = ref<SortKey>('modified')
+const sortDirection = ref<'asc' | 'desc'>('desc')
 const { isDark } = useTheme()
 const {
     previewFile,
@@ -77,6 +87,8 @@ async function fetchFiles() {
         const params = new URLSearchParams()
         if (activeCategories.value.length) params.append('category', activeCategories.value.join(','))
         if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
+        params.append('sort', sortKey.value)
+        params.append('dir', sortDirection.value)
         params.append('limit', '1000')
 
         const res = await fetch(`/api/files?${params.toString()}`)
@@ -115,6 +127,16 @@ function formatCount(count: number | undefined) {
 
 function getFilterCount(filterId: string) {
     return filterId === 'all' ? totalFileCount.value : categoryCounts.value[filterId]
+}
+
+function toggleSort(key: SortKey) {
+    if (sortKey.value === key) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    } else {
+        sortKey.value = key
+        sortDirection.value = key === 'name' || key === 'type' ? 'asc' : 'desc'
+    }
+    fetchFiles()
 }
 
 let searchTimeout: ReturnType<typeof setTimeout>
@@ -194,7 +216,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
+                            }}</strong> results
                         <span v-if="activeCategories.length"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -257,6 +279,39 @@ onMounted(() => {
             <!-- LIST VIEW -->
             <div v-else
                 class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border">
+
+                <!-- Column Headers -->
+                <div
+                    class="flex items-center justify-between bg-gemini-surface/60 px-5 py-2 text-xs font-medium text-gemini-subtext">
+                    <div class="flex min-w-0 flex-1 items-center gap-3.5 pr-4">
+                        <span class="h-5 w-5 shrink-0"></span>
+                        <button type="button"
+                            class="flex cursor-pointer items-center gap-1 transition-colors hover:text-gemini-text"
+                            :class="{ 'font-semibold text-gemini-blue': sortKey === 'name' }"
+                            @click="toggleSort('name')">
+                            Name
+                            <component v-if="sortKey === 'name'" :is="sortDirection === 'asc' ? ArrowUp : ArrowDown"
+                                class="h-3 w-3" />
+                        </button>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-4">
+                        <button v-for="column in SORT_COLUMNS" :key="column.key" type="button" :class="[
+                            column.class,
+                            sortKey === column.key ? 'font-semibold text-gemini-blue' : '',
+                        ]" class="cursor-pointer transition-colors hover:text-gemini-text"
+                            @click="toggleSort(column.key)">
+                            <span class="inline-flex items-center gap-1">
+                                {{ column.label }}
+                                <component v-if="sortKey === column.key"
+                                    :is="sortDirection === 'asc' ? ArrowUp : ArrowDown" class="h-3 w-3" />
+                            </span>
+                        </button>
+                        <span class="w-4"></span>
+                        <span class="w-8"></span>
+                    </div>
+                </div>
+
                 <div v-for="file in files" :key="file.id"
                     class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
                     @dblclick="openPreview(file, files)">
