@@ -33,11 +33,13 @@ const showHeader = computed(() => !showFilters.value)
 const files = ref<MediaFile[]>([])
 const categoryCounts = ref<Record<string, number>>({})
 const isLoading = ref(true)
+const hasLoadedOnce = ref(false)
 const searchQuery = ref('')
 const selectedFilter = ref<string>('all')
 const viewMode = ref<'grid' | 'list'>('list')
 const sortKey = ref<SortKey>('modified')
 const sortDirection = ref<'asc' | 'desc'>('desc')
+const showSkeleton = computed(() => isLoading.value && !hasLoadedOnce.value)
 const { isDark } = useTheme()
 const {
     previewFile,
@@ -97,6 +99,7 @@ async function fetchFiles() {
         console.error('Failed to load files:', err)
     } finally {
         isLoading.value = false
+        hasLoadedOnce.value = true
     }
 }
 
@@ -234,7 +237,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="activeCategories.length"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -254,14 +257,22 @@ onMounted(() => {
                 </span>
             </div>
 
-            <!-- Loading Skeleton -->
-            <div v-if="isLoading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <!-- Loading Skeleton: only before the first result set, so refetches don't flash a layout swap -->
+            <div v-if="showSkeleton && viewMode === 'grid'"
+                class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 <div v-for="n in 10" :key="n"
                     class="bg-gemini-card border border-gemini-border rounded-xl p-4 h-36 animate-pulse"></div>
             </div>
 
+            <div v-else-if="showSkeleton"
+                class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border">
+                <div v-for="n in 10" :key="n" class="h-[57px] animate-pulse px-5 py-3.5">
+                    <div class="h-full w-1/3 rounded-lg bg-gemini-surface"></div>
+                </div>
+            </div>
+
             <!-- Empty State -->
-            <div v-else-if="files.length === 0"
+            <div v-else-if="files.length === 0 && !isLoading"
                 class="text-center py-16 bg-gemini-card border border-dashed border-gemini-border rounded-3xl p-8">
                 <Filter class="h-10 w-10 text-gemini-subtext mx-auto mb-3 opacity-60" />
                 <h3 class="text-base font-semibold text-gemini-text">No files found</h3>
@@ -272,7 +283,8 @@ onMounted(() => {
 
             <!-- GRID VIEW -->
             <div v-else-if="viewMode === 'grid'"
-                class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 transition-opacity duration-150"
+                :class="{ 'opacity-50': isLoading }">
                 <div v-for="file in files" :key="file.id"
                     class="group bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
                     @dblclick="openPreview(file, files)">
@@ -296,7 +308,8 @@ onMounted(() => {
 
             <!-- LIST VIEW -->
             <div v-else
-                class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border">
+                class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border transition-opacity duration-150"
+                :class="{ 'opacity-50': isLoading }">
 
                 <!-- Column Headers -->
                 <div
