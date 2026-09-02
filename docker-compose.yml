@@ -1,0 +1,19 @@
+
+services:
+  wolfdrive-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wolfdrive-prod
+    restart: unless-stopped
+    ports:
+      - "3050:3000" # host port 3050
+    volumes:
+      # Maps local ./data-prod host folder -> container /app/data volume
+      - ./data-prod:/app/data
+      # Mount your actual media storage folders here (Read-Only)
+      - /mnt/world/Production:/media:ro
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - DB_PATH=/app/data/wolfdrive-prod.db

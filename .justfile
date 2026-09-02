@@ -13,3 +13,19 @@ backend:
 # Run Vite frontend dev server only
 frontend:
 	bun run dev
+
+# Build and deploy the production Docker container in the background
+prod-up:
+	docker compose up --build -d
+
+# View live production container logs
+prod-logs:
+	docker compose logs -f
+
+# Stop the production container
+prod-down:
+	docker compose down
+
+# Check container status
+prod-status:
+	docker compose ps
