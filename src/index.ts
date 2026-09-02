@@ -219,7 +219,7 @@ app.get('/api/files', async (c) => {
     const category = c.req.query('category') // 'image' | 'video' | 'audio' | 'document'
     const search = c.req.query('search')
     const limitParam = c.req.query('limit')
-    const limit = limitParam ? parseInt(limitParam) : 10000
+    const limit = limitParam ? parseInt(limitParam) : 1000
 
     let conditions = [eq(mediaFiles.userId, userId)]
 

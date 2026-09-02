@@ -42,7 +42,7 @@ async function fetchStats() {
 async function fetchFiles() {
     isLoading.value = true
     try {
-        const params = new URLSearchParams({ category: 'document', limit: '10000' })
+        const params = new URLSearchParams({ category: 'document', limit: '1000' })
         if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
 
         const response = await fetch(`/api/files?${params.toString()}`)
@@ -101,7 +101,7 @@ onMounted(() => {
             <div class="mb-5 px-1 text-xs font-medium text-gemini-subtext">
                 <span v-if="searchQuery.trim()">Found <strong class="font-semibold text-gemini-text">{{
                     files.length.toLocaleString() }}</strong> matching documents</span>
-                <span v-else>Showing <strong class="font-semibold text-gemini-text">{{ documentCount.toLocaleString()
+                <span v-else><strong class="font-semibold text-gemini-text">{{ documentCount.toLocaleString()
                 }}</strong> indexed documents</span>
             </div>
 

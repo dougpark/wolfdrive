@@ -76,7 +76,7 @@ async function fetchFiles() {
     if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
 
     // Request up to 10,000 files per fetch
-    params.append('limit', '10000')
+    params.append('limit', '1000')
 
     const res = await fetch(`/api/files?${params.toString()}`)
     files.value = await res.json()
@@ -192,17 +192,17 @@ onMounted(() => {
             for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
           </span>
           <span v-else-if="selectedCategory !== 'all'">
-            Showing <strong class="text-gemini-text font-semibold">{{ (categoryCounts[selectedCategory] ||
+            <strong class="text-gemini-text font-semibold">{{ (categoryCounts[selectedCategory] ||
               0).toLocaleString() }}</strong> {{ selectedCategory }} files
           </span>
           <span v-else>
-            Showing <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString() }}</strong> total
+            <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString() }}</strong> total
             indexed files
           </span>
         </div>
 
-        <span v-if="files.length >= 10000" class="text-amber-500 font-mono text-[11px]">
-          (Capped at 10,000 items)
+        <span v-if="files.length >= 1000" class="text-amber-500 font-mono text-[11px]">
+          (Capped at 1000 items)
         </span>
       </div>
 
