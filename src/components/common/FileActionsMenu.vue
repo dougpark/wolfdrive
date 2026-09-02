@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Download, ExternalLink, MoreVertical } from 'lucide-vue-next'
+import { Download, ExternalLink, MessageSquareText, MoreVertical } from 'lucide-vue-next'
+import { useAiChatPanel } from '@/composables/useAiChatPanel'
 import type { MediaFile } from '@/types/media'
 
 const props = withDefaults(defineProps<{
@@ -14,6 +15,7 @@ const isOpen = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
 const streamUrl = computed(() => `/api/stream/${encodeURIComponent(props.file.id)}`)
 const previewUrl = computed(() => `/preview/${encodeURIComponent(props.file.id)}`)
+const { open: openAiPanel } = useAiChatPanel()
 
 function closeMenu() {
     isOpen.value = false
@@ -43,6 +45,11 @@ function downloadFile() {
 
 function openInNewTab() {
     window.open(previewUrl.value, '_blank', 'noopener,noreferrer')
+    closeMenu()
+}
+
+function askLocalAi() {
+    openAiPanel(props.file)
     closeMenu()
 }
 
@@ -82,6 +89,12 @@ onBeforeUnmount(() => {
                 role="menuitem" @click="openInNewTab">
                 <ExternalLink class="h-4 w-4 text-gemini-subtext" />
                 <span>Open in new tab</span>
+            </button>
+            <button type="button"
+                class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                role="menuitem" @click="askLocalAi">
+                <MessageSquareText class="h-4 w-4 text-gemini-subtext" />
+                <span>Ask local AI</span>
             </button>
         </div>
     </div>

@@ -8,6 +8,46 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 
+const OLLAMA_URL = 'http://127.0.0.1:11434/api/generate'
+const MODEL_NAME = 'gemma4:e4b'
+const AI_ATTACHMENT_MAX_BYTES = 200_000
+const AI_TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'])
+
+function canAttachFileContent(file: typeof mediaFiles.$inferSelect) {
+    return file.mimeType?.startsWith('text/') || AI_TEXT_EXTENSIONS.has(file.extension.toLowerCase())
+}
+
+async function buildFileAttachment(fileId: string, userId: string) {
+    const [file] = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, fileId), eq(mediaFiles.userId, userId)))
+        .limit(1)
+
+    if (!file) return ''
+
+    const diskFile = Bun.file(file.path)
+    const exists = await diskFile.exists()
+    const header = [
+        'Attached file metadata:',
+        `Filename: ${file.filename}`,
+        `Relative path: ${file.relativePath}`,
+        `MIME type: ${file.mimeType || 'unknown'}`,
+        `Size: ${file.sizeBytes} bytes`,
+    ].join('\n')
+
+    if (!exists) return `${header}\n\nFile contents are unavailable because the file is no longer on disk.`
+    if (!canAttachFileContent(file)) {
+        return `${header}\n\nFile contents were not attached because this file type is not text-readable yet.`
+    }
+    if (file.sizeBytes > AI_ATTACHMENT_MAX_BYTES) {
+        return `${header}\n\nFile contents were not attached because the file is larger than ${AI_ATTACHMENT_MAX_BYTES} bytes.`
+    }
+
+    const content = await diskFile.text()
+    return `${header}\n\nAttached file contents:\n\n${content}`
+}
+
 // Define custom environment variables type for context storage
 type Env = {
     Variables: {
@@ -31,6 +71,50 @@ app.get('/api/hello', (c) => {
         message: 'WolfDrive backend is live on Bun!',
         status: 'ok',
     })
+})
+
+// POST /api/ai/chat - Send a prompt to the local Ollama model
+app.post('/api/ai/chat', async (c) => {
+    const userId = c.get('userId')
+    const { message, fileId } = await c.req.json<{ message?: string; fileId?: string }>()
+    const trimmedMessage = message?.trim()
+
+    if (!trimmedMessage) {
+        return c.json({ error: 'Message is required' }, 400)
+    }
+
+    const attachment = fileId ? await buildFileAttachment(fileId, userId) : ''
+    const prompt = [
+        'You are WolfDrive local AI, a helpful assistant for a personal media library.',
+        'Answer clearly and concisely. If an attached file is provided, use it as context for the user request.',
+        attachment,
+        `User request:\n${trimmedMessage}`,
+    ].filter(Boolean).join('\n\n')
+
+    try {
+        const response = await fetch(OLLAMA_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: MODEL_NAME,
+                prompt,
+                stream: false,
+                options: {
+                    temperature: 0.2,
+                },
+            }),
+        })
+
+        if (!response.ok) {
+            return c.json({ error: `Ollama request failed: ${response.status}` }, 502)
+        }
+
+        const data = await response.json() as { response?: string }
+        return c.json({ response: data.response ?? '' })
+    } catch (error) {
+        console.error('Ollama request failed:', error)
+        return c.json({ error: 'Unable to reach local AI service' }, 502)
+    }
 })
 
 // Add future backend API endpoints here

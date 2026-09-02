@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from '@/composables/useTheme'
+import { useAiChatPanel } from '@/composables/useAiChatPanel'
 import {
     Folder,
     Image,
@@ -14,12 +15,14 @@ import {
     Info,
     Settings,
     SlidersHorizontal,
+    Sparkles,
     User,
     Shield
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const { isDark } = useTheme()
+const { isOpen: isAiPanelOpen, toggle: toggleAiPanel } = useAiChatPanel()
 
 const logoSrc = computed(() =>
     isDark.value
@@ -73,54 +76,63 @@ const categories = [
             </div>
 
             <!-- Settings Dropdown Container -->
-            <div class="relative" ref="dropdownRef">
-                <button @click.stop="toggleSettings"
-                    class="flex h-9 w-9 items-center justify-center rounded-full text-gemini-subtext hover:bg-gemini-surface transition-colors focus:outline-none focus:ring-2 focus:ring-gemini-blue cursor-pointer"
-                    :class="{ 'bg-gemini-surface text-gemini-blue': isSettingsOpen }" aria-label="Settings menu"
-                    :aria-expanded="isSettingsOpen">
-                    <Settings class="h-5 w-5 transition-transform duration-200"
-                        :class="{ 'rotate-45': isSettingsOpen }" />
+            <div class="flex items-center gap-1">
+                <button type="button" @click="toggleAiPanel()"
+                    class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-blue focus:outline-none focus:ring-2 focus:ring-gemini-blue"
+                    :class="{ 'bg-gemini-surface text-gemini-blue': isAiPanelOpen }" aria-label="Open local AI chat"
+                    title="Open local AI chat">
+                    <Sparkles class="h-5 w-5" />
                 </button>
 
-                <!-- Dropdown Menu -->
-                <Transition enter-active-class="transition duration-150 ease-out"
-                    enter-from-class="transform scale-95 opacity-0 -translate-y-1"
-                    enter-to-class="transform scale-100 opacity-100 translate-y-0"
-                    leave-active-class="transition duration-100 ease-in"
-                    leave-from-class="transform scale-100 opacity-100 translate-y-0"
-                    leave-to-class="transform scale-95 opacity-0 -translate-y-1">
-                    <div v-if="isSettingsOpen"
-                        class="absolute right-0 mt-2 w-56 rounded-xl border border-gemini-border bg-gemini-surface p-2 shadow-md z-50 transition-colors duration-200">
-                        <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gemini-subtext">
-                            Preferences
+                <div class="relative" ref="dropdownRef">
+                    <button @click.stop="toggleSettings"
+                        class="flex h-9 w-9 items-center justify-center rounded-full text-gemini-subtext hover:bg-gemini-surface transition-colors focus:outline-none focus:ring-2 focus:ring-gemini-blue cursor-pointer"
+                        :class="{ 'bg-gemini-surface text-gemini-blue': isSettingsOpen }" aria-label="Settings menu"
+                        :aria-expanded="isSettingsOpen">
+                        <Settings class="h-5 w-5 transition-transform duration-200"
+                            :class="{ 'rotate-45': isSettingsOpen }" />
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <Transition enter-active-class="transition duration-150 ease-out"
+                        enter-from-class="transform scale-95 opacity-0 -translate-y-1"
+                        enter-to-class="transform scale-100 opacity-100 translate-y-0"
+                        leave-active-class="transition duration-100 ease-in"
+                        leave-from-class="transform scale-100 opacity-100 translate-y-0"
+                        leave-to-class="transform scale-95 opacity-0 -translate-y-1">
+                        <div v-if="isSettingsOpen"
+                            class="absolute right-0 mt-2 w-56 rounded-xl border border-gemini-border bg-gemini-surface p-2 shadow-md z-50 transition-colors duration-200">
+                            <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gemini-subtext">
+                                Preferences
+                            </div>
+
+                            <a href="/about" @click="isSettingsOpen = false"
+                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
+                                <Info class="h-4 w-4 text-gemini-subtext" />
+                                About WolfDrive
+                            </a>
+                            <a href="/settings" @click="isSettingsOpen = false"
+                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
+                                <SlidersHorizontal class="h-4 w-4 text-gemini-subtext" />
+                                App Settings
+                            </a>
+
+                            <a href="/settings/account" @click="isSettingsOpen = false"
+                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
+                                <User class="h-4 w-4 text-gemini-subtext" />
+                                Account
+                            </a>
+
+                            <hr class="my-1 border-gemini-border" />
+
+                            <a href="/settings/admin" @click="isSettingsOpen = false"
+                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
+                                <Shield class="h-4 w-4 text-gemini-subtext" />
+                                Server Admin
+                            </a>
                         </div>
-
-                        <a href="/about" @click="isSettingsOpen = false"
-                            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
-                            <Info class="h-4 w-4 text-gemini-subtext" />
-                            About WolfDrive
-                        </a>
-                        <a href="/settings" @click="isSettingsOpen = false"
-                            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
-                            <SlidersHorizontal class="h-4 w-4 text-gemini-subtext" />
-                            App Settings
-                        </a>
-
-                        <a href="/settings/account" @click="isSettingsOpen = false"
-                            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
-                            <User class="h-4 w-4 text-gemini-subtext" />
-                            Account
-                        </a>
-
-                        <hr class="my-1 border-gemini-border" />
-
-                        <a href="/settings/admin" @click="isSettingsOpen = false"
-                            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gemini-text hover:bg-gemini-surface transition-colors">
-                            <Shield class="h-4 w-4 text-gemini-subtext" />
-                            Server Admin
-                        </a>
-                    </div>
-                </Transition>
+                    </Transition>
+                </div>
             </div>
         </div>
 
