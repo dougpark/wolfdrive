@@ -17,3 +17,7 @@ services:
       - PORT=3000
       - NODE_ENV=production
       - DB_PATH=/app/data/wolfdrive-prod.db
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      

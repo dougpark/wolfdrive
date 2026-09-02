@@ -8,7 +8,12 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 
-const OLLAMA_URL = 'http://127.0.0.1:11434/api/generate'
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL
+    ? process.env.OLLAMA_BASE_URL.replace(/\/+$/, '')
+    : 'http://127.0.0.1:11434';
+
+const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
+// const OLLAMA_URL = process.env.OLLAMA_BASE_URL ? `${process.env.OLLAMA_BASE_URL}/api/generate` : 'http://127.0.0.1:11434/api/generate'
 const MODEL_NAME = 'gemma4:e4b'
 const AI_ATTACHMENT_MAX_BYTES = 200_000
 const AI_TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml'])

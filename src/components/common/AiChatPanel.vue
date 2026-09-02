@@ -25,12 +25,25 @@ async function scrollToBottom() {
     }
 }
 
+// Helper function to safely generate unique IDs across both HTTP and HTTPS contexts
+function generateId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // Fallback UUID v4 format for unsecure HTTP contexts
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+
 async function sendPrompt() {
     const message = prompt.value.trim()
     if (!message || isSending.value) return
 
     const fileId = attachedFile.value?.id
-    messages.value.push({ id: crypto.randomUUID(), role: 'user', content: message })
+    messages.value.push({ id: generateId(), role: 'user', content: message })
     prompt.value = ''
     errorMessage.value = ''
     isSending.value = true
@@ -47,7 +60,7 @@ async function sendPrompt() {
 
         const data = await response.json() as { response?: string }
         messages.value.push({
-            id: crypto.randomUUID(),
+            id: generateId(),
             role: 'assistant',
             content: data.response?.trim() || 'No response returned.',
         })
