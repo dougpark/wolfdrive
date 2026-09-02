@@ -13,5 +13,15 @@
   "vue.inlayHints.missingProps": true,
   "chat.tools.terminal.autoApprove": {
     "bun": true
-  }
+  },
+  // help with remote vite dev server
+  "remote.portsAttributes": {
+    "5173": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "notify",
+      "elevateIfNeeded": false
+    }
+  },
+  "remote.restoreForwardedPorts": true
+
 }
