@@ -354,18 +354,19 @@ app.get('/api/reading-state/:fileId', async (c) => {
         .where(and(eq(readingState.userId, userId), eq(readingState.fileId, fileId)))
         .limit(1)
 
-    return c.json(row ?? { cfi: null, fontSize: null })
+    return c.json(row ?? { cfi: null, farthestCfi: null, fontSize: null })
 })
 
 // PUT /api/reading-state/:fileId - Upsert saved EPUB reader state
 app.put('/api/reading-state/:fileId', async (c) => {
     const userId = c.get('userId')
     const fileId = c.req.param('fileId')
-    const body = await c.req.json<{ cfi?: string | null; fontSize?: number }>()
+    const body = await c.req.json<{ cfi?: string | null; farthestCfi?: string | null; fontSize?: number }>()
 
     const now = new Date().toISOString()
-    const updates: { cfi?: string | null; fontSize?: number; updatedAt: string } = { updatedAt: now }
+    const updates: { cfi?: string | null; farthestCfi?: string | null; fontSize?: number; updatedAt: string } = { updatedAt: now }
     if (body.cfi !== undefined) updates.cfi = body.cfi
+    if (body.farthestCfi !== undefined) updates.farthestCfi = body.farthestCfi
     if (body.fontSize !== undefined) updates.fontSize = body.fontSize
 
     await db
@@ -375,6 +376,7 @@ app.put('/api/reading-state/:fileId', async (c) => {
             userId,
             fileId,
             cfi: body.cfi ?? null,
+            farthestCfi: body.farthestCfi ?? null,
             fontSize: body.fontSize ?? 15,
             updatedAt: now,
         })

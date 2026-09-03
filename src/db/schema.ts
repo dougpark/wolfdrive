@@ -76,6 +76,7 @@ export const readingState = sqliteTable('reading_state', {
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     fileId: text('file_id').notNull().references(() => mediaFiles.id, { onDelete: 'cascade' }),
     cfi: text('cfi'), // epub.js Canonical Fragment Identifier for the last read position
+    farthestCfi: text('farthest_cfi'), // High-water mark: the furthest CFI ever reached
     fontSize: integer('font_size').notNull().default(15),
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [

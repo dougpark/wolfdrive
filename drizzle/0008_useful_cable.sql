@@ -1,0 +1,1 @@
+ALTER TABLE `reading_state` ADD `farthest_cfi` text;

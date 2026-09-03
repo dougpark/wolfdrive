@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ePub from 'epubjs'
-import { Minus, Plus, SkipBack, History } from 'lucide-vue-next'
+import { Minus, Plus, SkipBack, ArrowRight } from 'lucide-vue-next'
 
 const props = defineProps<{
     url: string
@@ -14,6 +14,10 @@ const loadError = ref('')
 const fontSize = ref(15)
 const savedCfi = ref<string | null>(null)
 const currentCfi = ref<string | null>(null)
+const farthestCfi = ref<string | null>(null)
+/** Spine index of the current and farthest positions, for high-water-mark comparison. */
+const currentSpineIndex = ref(-1)
+const farthestSpineIndex = ref(-1)
 
 const MIN_FONT_SIZE = 12
 const MAX_FONT_SIZE = 24
@@ -26,8 +30,10 @@ const fontStack = `Inter, Roboto, -apple-system, 'Segoe UI', Helvetica, Arial, s
 /** Comfortable reading measure (~65–75 characters per line at 15px). */
 const readingWidth = '720px'
 
-/** Offer the jump-back button only when the reader has moved away from the saved spot. */
-const canJumpToSaved = computed(() => !!savedCfi.value && savedCfi.value !== currentCfi.value)
+/** Show the banner when browsing behind the high-water mark. */
+const isBehindFarthest = computed(
+    () => farthestCfi.value !== null && currentSpineIndex.value >= 0 && currentSpineIndex.value < farthestSpineIndex.value,
+)
 
 function applyTheme() {
     const textColor = props.isDark ? '#e3e3e3' : '#1f1f1f'
@@ -75,9 +81,18 @@ async function fetchReaderState() {
             fontSize.value = state.fontSize
         }
         if (typeof state.cfi === 'string' && state.cfi) savedCfi.value = state.cfi
+        if (typeof state.farthestCfi === 'string' && state.farthestCfi) farthestCfi.value = state.farthestCfi
     } catch (error) {
         console.error('Failed to load reading state:', error)
     }
+}
+
+/** Spine index for a CFI (its `/N/` step maps to `spineItems[N - 2]`), used to compare positions. */
+function spineIndexForCfi(cfi: string | null): number {
+    if (!cfi || !book) return -1
+    const match = /\/(\d+)(?:\[|$)/.exec(cfi)
+    if (!match) return -1
+    return parseInt(match[1], 10) - 2
 }
 
 /** Debounced upsert: scrolling fires `relocated` continuously, so coalesce into one write. */
@@ -88,7 +103,11 @@ function persistReaderState() {
             await fetch(`/api/reading-state/${props.fileId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cfi: currentCfi.value ?? savedCfi.value, fontSize: fontSize.value }),
+                body: JSON.stringify({
+                    cfi: currentCfi.value ?? savedCfi.value,
+                    farthestCfi: farthestCfi.value,
+                    fontSize: fontSize.value,
+                }),
             })
             savedCfi.value = currentCfi.value ?? savedCfi.value
         } catch (error) {
@@ -101,6 +120,12 @@ function handleRelocated(location: any) {
     const cfi = location?.start?.cfi
     if (!cfi) return
     currentCfi.value = cfi
+    currentSpineIndex.value = spineIndexForCfi(cfi)
+    // Advance the high-water mark only when the reader pushes into new sections.
+    if (currentSpineIndex.value > farthestSpineIndex.value) {
+        farthestSpineIndex.value = currentSpineIndex.value
+        farthestCfi.value = cfi
+    }
     persistReaderState()
 }
 
@@ -116,8 +141,8 @@ function jumpToBeginning() {
     rendition?.display()
 }
 
-function jumpToSavedPosition() {
-    if (savedCfi.value) rendition?.display(savedCfi.value)
+function jumpToFarthest() {
+    if (farthestCfi.value) rendition?.display(farthestCfi.value)
 }
 
 async function loadBook() {
@@ -127,6 +152,9 @@ async function loadBook() {
     loadError.value = ''
     savedCfi.value = null
     currentCfi.value = null
+    farthestCfi.value = null
+    currentSpineIndex.value = -1
+    farthestSpineIndex.value = -1
 
     try {
         await fetchReaderState()
@@ -147,6 +175,8 @@ async function loadBook() {
         })
         applyTheme()
         rendition.on('relocated', handleRelocated)
+        // Seed the comparison indexes from the restored state.
+        farthestSpineIndex.value = spineIndexForCfi(farthestCfi.value)
         // Resume at the saved CFI when one exists, otherwise open the first section.
         await rendition.display(savedCfi.value || undefined)
     } catch (error) {
@@ -187,15 +217,19 @@ onBeforeUnmount(() => {
                     title="Jump to beginning" @click="jumpToBeginning">
                     <SkipBack class="h-4 w-4" />
                 </button>
-                <button type="button" :disabled="!canJumpToSaved"
-                    class="rounded-lg p-2 text-gemini-text transition-colors hover:bg-gemini-surface cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                    title="Return to last read position" @click="jumpToSavedPosition">
-                    <History class="h-4 w-4" />
-                </button>
             </div>
             <span class="text-xs text-gemini-subtext">EPUB Preview</span>
         </div>
-        <div ref="viewerContainer" class="min-h-0 flex-1 overflow-hidden"></div>
+        <div class="relative min-h-0 flex-1">
+            <div ref="viewerContainer" class="absolute inset-0 overflow-hidden"></div>
+            <!-- High-water-mark banner: shown when browsing behind the farthest read position -->
+            <button v-if="isBehindFarthest" type="button"
+                class="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full bg-gemini-blue px-4 py-2 text-xs font-medium text-white shadow-md transition-all hover:opacity-90"
+                @click="jumpToFarthest">
+                Jump ahead to farthest read
+                <ArrowRight class="h-3.5 w-3.5" />
+            </button>
+        </div>
         <p v-if="loadError" class="px-4 py-3 text-sm text-gemini-subtext">{{ loadError }}</p>
     </div>
 </template>
