@@ -9,6 +9,11 @@ const props = defineProps<{
     isDark: boolean
 }>()
 
+const emit = defineEmits<{
+    /** Reported on unmount so the file list can merge final progress without a refetch. */
+    (e: 'progress', payload: { fileId: string; percentRead: number | null }): void
+}>()
+
 const viewerContainer = ref<HTMLElement | null>(null)
 const loadError = ref('')
 const fontSize = ref(15)
@@ -254,6 +259,7 @@ watch(() => props.url, loadBook)
 onMounted(loadBook)
 
 onBeforeUnmount(() => {
+    emit('progress', { fileId: props.fileId, percentRead: percentRead.value })
     if (saveTimer) clearTimeout(saveTimer)
     book?.destroy()
 })

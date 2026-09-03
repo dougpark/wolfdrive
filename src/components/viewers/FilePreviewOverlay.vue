@@ -23,6 +23,8 @@ const emit = defineEmits<{
     (e: 'close'): void
     (e: 'previous'): void
     (e: 'next'): void
+    /** Bubbled up from the active viewer when the preview closes. */
+    (e: 'progress', payload: Record<string, unknown> & { fileId: string }): void
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
@@ -84,7 +86,7 @@ onMounted(() => {
                 <pre v-else-if="props.isText"
                     class="h-full overflow-auto overscroll-contain rounded-xl bg-gemini-surface p-4 font-mono text-sm text-gemini-text whitespace-pre-wrap">{{ props.isTextLoading ? 'Loading preview...' : props.textContent }}</pre>
                 <EpubPreview v-else-if="props.file.mediaCategory === 'epub'" :url="`/api/stream/${props.file.id}`"
-                    :file-id="props.file.id" :isDark="props.isDark" />
+                    :file-id="props.file.id" :isDark="props.isDark" @progress="(p) => emit('progress', p)" />
                 <iframe v-else :src="`/api/stream/${props.file.id}`" :title="props.file.filename"
                     class="h-full w-full rounded-xl border border-gemini-border bg-gemini-card"
                     style="color-scheme: light"></iframe>

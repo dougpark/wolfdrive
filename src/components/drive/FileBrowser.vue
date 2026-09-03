@@ -23,6 +23,8 @@ const hasExtraColumns = computed(() => !!slots['column-header'] && !!slots['colu
 
 const emit = defineEmits<{
     (e: 'files-loaded', files: MediaFile[]): void
+    /** Bubbled from the preview overlay when a viewer reports final progress on close. */
+    (e: 'progress', payload: Record<string, unknown> & { fileId: string }): void
 }>()
 
 type SortKey = 'name' | 'type' | 'modified' | 'size'
@@ -246,7 +248,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="activeCategories.length"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -388,7 +390,7 @@ onMounted(() => {
 
         <FilePreviewOverlay v-if="previewFile" :file="previewFile" :is-dark="isDark" :is-markdown="isMarkdownPreview"
             :is-text="isTextPreview" :is-text-loading="isTextPreviewLoading" :text-content="textContent"
-            :has-previous="hasPrevious" :has-next="hasNext" @close="closePreview" @previous="goPrevious"
-            @next="goNext" />
+            :has-previous="hasPrevious" :has-next="hasNext" @close="closePreview" @previous="goPrevious" @next="goNext"
+            @progress="(p) => emit('progress', p)" />
     </div>
 </template>
