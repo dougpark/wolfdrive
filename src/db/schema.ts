@@ -47,6 +47,8 @@ export const mediaFiles = sqliteTable('media_files', {
     extension: text('extension').notNull(),
     mimeType: text('mime_type'),
     mediaCategory: text('media_category').notNull(), // 'image' | 'video' | 'audio' | 'document' | 'other'
+    /** User-assigned library category ids (JSON array), additive to the mime-derived mediaCategory. */
+    customCategories: text('custom_categories', { mode: 'json' }).$type<string[]>(),
     sizeBytes: integer('size_bytes').notNull(),
     mtimeMs: integer('mtime_ms').notNull(),
     indexedAt: text('indexed_at').default(sql`CURRENT_TIMESTAMP`),

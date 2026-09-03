@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, useSlots, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
 import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
+import CategoryPickerModal from '@/components/common/CategoryPickerModal.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import type { MediaFile } from '@/types/media'
 import {
@@ -37,7 +38,7 @@ const SORT_COLUMNS: { key: SortKey; label: string; class: string }[] = [
 
 const library = computed(() => LIBRARY_CATEGORIES[props.library])
 /** The Files view is unfiltered, so it gets the media-type filter chips. */
-const showFilters = computed(() => library.value.categories.length === 0)
+const showFilters = computed(() => props.library === 'files')
 const showHeader = computed(() => !showFilters.value)
 
 const files = ref<MediaFile[]>([])
@@ -65,24 +66,35 @@ const {
     goPrevious,
 } = useFilePreview()
 
-/** Categories sent to the API: the library filter, narrowed by the chip selection. */
-const activeCategories = computed(() => {
-    if (!showFilters.value) return [...library.value.categories]
-    return selectedFilter.value === 'all' ? [] : [selectedFilter.value]
-})
+/** True when the current view is scoped to a library or a media-type chip. */
+const hasScope = computed(() => !showFilters.value || selectedFilter.value !== 'all')
 
 const totalFileCount = computed(() =>
     Object.values(categoryCounts.value).reduce((a, b) => a + b, 0),
 )
 
-const activeCount = computed(() => {
-    if (activeCategories.value.length === 0) return totalFileCount.value
-    return activeCategories.value.reduce((sum, id) => sum + (categoryCounts.value[id] || 0), 0)
+/**
+ * Header count for the current scope. Library views use the fetched result size
+ * because user-assigned tags change membership and /api/stats is mime-only.
+ */
+const scopedCount = computed(() => {
+    if (!showFilters.value) return files.value.length
+    return selectedFilter.value === 'all'
+        ? totalFileCount.value
+        : (categoryCounts.value[selectedFilter.value] || 0)
 })
 
 const scopeLabel = computed(() =>
     showFilters.value ? selectedFilter.value : library.value.label.toLowerCase(),
 )
+
+/** File currently being re-categorized, or null when the modal is closed. */
+const editingFile = ref<MediaFile | null>(null)
+
+async function handleCategoriesSaved() {
+    editingFile.value = null
+    await fetchFiles()
+}
 
 async function fetchStats() {
     try {
@@ -97,7 +109,13 @@ async function fetchFiles() {
     isLoading.value = true
     try {
         const params = new URLSearchParams()
-        if (activeCategories.value.length) params.append('category', activeCategories.value.join(','))
+        // Library views filter by library id (mime defaults + user-assigned tags);
+        // the unfiltered Files view narrows by media-type chip instead.
+        if (!showFilters.value) {
+            params.append('library', props.library)
+        } else if (selectedFilter.value !== 'all') {
+            params.append('category', selectedFilter.value)
+        }
         if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
         params.append('sort', sortKey.value)
         params.append('dir', sortDirection.value)
@@ -248,12 +266,12 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
-                        <span v-if="activeCategories.length"> in {{ scopeLabel }}</span>
+                            }}</strong> results
+                        <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
-                    <span v-else-if="activeCategories.length">
-                        <strong class="text-gemini-text font-semibold">{{ activeCount.toLocaleString() }}</strong>
+                    <span v-else-if="hasScope">
+                        <strong class="text-gemini-text font-semibold">{{ scopedCount.toLocaleString() }}</strong>
                         {{ scopeLabel }} files
                     </span>
                     <span v-else>
@@ -381,7 +399,7 @@ onMounted(() => {
                             :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
                             <Eye class="h-4 w-4" />
                         </button>
-                        <FileActionsMenu :file="file" />
+                        <FileActionsMenu :file="file" @edit-categories="editingFile = file" />
                     </div>
                 </div>
             </div>
@@ -392,5 +410,8 @@ onMounted(() => {
             :is-text="isTextPreview" :is-text-loading="isTextPreviewLoading" :text-content="textContent"
             :has-previous="hasPrevious" :has-next="hasNext" @close="closePreview" @previous="goPrevious" @next="goNext"
             @progress="(p) => emit('progress', p)" />
+
+        <CategoryPickerModal v-if="editingFile" :file="editingFile" @close="editingFile = null"
+            @saved="handleCategoriesSaved" />
     </div>
 </template>

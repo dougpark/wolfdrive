@@ -78,6 +78,13 @@
       "when": 1788471142688,
       "tag": "0010_smart_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788476994733,
+      "tag": "0011_little_mindworm",
+      "breakpoints": true
     }
   ]
 }

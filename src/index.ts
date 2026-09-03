@@ -9,6 +9,11 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
+import {
+    CUSTOM_ONLY_LIBRARY_IDS,
+    LIBRARY_CATEGORY_MIME_MAP,
+    SELECTABLE_LIBRARY_IDS,
+} from './config/libraryCategoryData'
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL
     ? process.env.OLLAMA_BASE_URL.replace(/\/+$/, '')
@@ -234,11 +239,31 @@ app.get('/api/files', async (c) => {
     const userId = c.get('userId')
     // Comma-separated list, e.g. 'document,pdf'
     const category = c.req.query('category')
+    // Library id, e.g. 'books' — matches mime-derived defaults OR user-assigned tags
+    const library = c.req.query('library')?.trim()
     const search = c.req.query('search')
     const limitParam = c.req.query('limit')
     const limit = limitParam ? parseInt(limitParam) : 1000
 
     let conditions = [eq(mediaFiles.userId, userId)]
+
+    if (library && library !== 'files') {
+        const mimeCategories = LIBRARY_CATEGORY_MIME_MAP[library as keyof typeof LIBRARY_CATEGORY_MIME_MAP]
+        if (!mimeCategories) {
+            return c.json({ error: `Unknown library category: ${library}` }, 400)
+        }
+
+        // User tags live in the custom_categories JSON array; json_each expands them.
+        const customMatch = sql`EXISTS (SELECT 1 FROM json_each(${mediaFiles.customCategories}) WHERE json_each.value = ${library})`
+
+        if (CUSTOM_ONLY_LIBRARY_IDS.has(library) || mimeCategories.length === 0) {
+            conditions.push(customMatch)
+        } else if (mimeCategories.length === 1) {
+            conditions.push(or(eq(mediaFiles.mediaCategory, mimeCategories[0]!), customMatch)!)
+        } else {
+            conditions.push(or(inArray(mediaFiles.mediaCategory, mimeCategories), customMatch)!)
+        }
+    }
 
     const requestedCategories = (category ?? '')
         .split(',')
@@ -292,6 +317,37 @@ app.get('/api/files/:id', async (c) => {
     }
 
     return c.json(file)
+})
+
+// PUT /api/files/:id/categories - Replace the user-assigned library categories for a file
+app.put('/api/files/:id/categories', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const body = await c.req.json<{ categories?: unknown }>()
+
+    if (!Array.isArray(body.categories)) {
+        return c.json({ error: 'categories must be an array of library ids' }, 400)
+    }
+
+    // Drop anything that is not a known selectable library id
+    const allowed = new Set<string>(SELECTABLE_LIBRARY_IDS)
+    const categories = [
+        ...new Set(
+            body.categories.filter((value): value is string => typeof value === 'string' && allowed.has(value)),
+        ),
+    ]
+
+    const [updated] = await db
+        .update(mediaFiles)
+        .set({ customCategories: categories.length ? categories : null })
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId)))
+        .returning()
+
+    if (!updated) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    return c.json(updated)
 })
 
 // GET /api/stream/:id - Stream an indexed file for browser previews

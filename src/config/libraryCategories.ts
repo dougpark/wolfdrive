@@ -11,17 +11,19 @@ import {
     Music,
 } from 'lucide-vue-next'
 import type { FunctionalComponent } from 'vue'
+import { LIBRARY_CATEGORY_MIME_MAP, type MediaCategory } from './libraryCategoryData'
 
-/** `mediaCategory` values produced by the scanner. */
-export type MediaCategory = 'image' | 'video' | 'audio' | 'pdf' | 'epub' | 'document' | 'other'
+export type { MediaCategory }
 
 export interface LibraryCategory {
     id: string
     label: string
     description: string
     icon: FunctionalComponent
-    /** Empty means "no filter" (all files). */
+    /** Mime-derived default membership. Empty means "no mime filter" (see libraryCategoryData). */
     categories: MediaCategory[]
+    /** True when membership comes only from manual user tags (no mime default). */
+    customOnly?: boolean
 }
 
 export const LIBRARY_CATEGORIES = {
@@ -30,70 +32,72 @@ export const LIBRARY_CATEGORIES = {
         label: 'Files',
         description: 'Every indexed file across your scanned directories.',
         icon: HardDrive,
-        categories: [],
+        categories: LIBRARY_CATEGORY_MIME_MAP.files,
     },
     photos: {
         id: 'photos',
         label: 'Photos',
         description: 'Your image library.',
         icon: ImageIcon,
-        categories: ['image'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.photos,
     },
     videos: {
         id: 'videos',
         label: 'Videos',
         description: 'Your video library.',
         icon: Film,
-        categories: ['video'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.videos,
     },
     books: {
         id: 'books',
         label: 'Books',
         description: 'eBooks available for reading.',
         icon: Book,
-        categories: ['epub'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.books,
     },
     documents: {
         id: 'documents',
         label: 'Documents',
         description: 'PDFs, Markdown, text and office documents.',
         icon: FileText,
-        categories: ['document', 'pdf'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.documents,
     },
     music: {
         id: 'music',
         label: 'Music',
         description: 'Your audio library.',
         icon: Music,
-        categories: ['audio'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.music,
     },
     movies: {
         id: 'movies',
         label: 'Movies',
         description: 'Feature-length video titles.',
         icon: Film,
-        categories: ['video'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.movies,
     },
     'tv-shows': {
         id: 'tv-shows',
         label: 'TV Shows',
         description: 'Series and episodes.',
         icon: Film,
-        categories: ['video'],
+        categories: LIBRARY_CATEGORY_MIME_MAP['tv-shows'],
     },
     games: {
         id: 'games',
         label: 'Games',
         description: 'Game images and ROMs.',
         icon: Gamepad2,
-        categories: ['other'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.games,
+        customOnly: true,
     },
     software: {
         id: 'software',
         label: 'Software',
         description: 'Applications, packages and installers.',
         icon: Cpu,
-        categories: ['other'],
+        categories: LIBRARY_CATEGORY_MIME_MAP.software,
+        customOnly: true,
     },
 } as const satisfies Record<string, LibraryCategory>
 
