@@ -78,6 +78,7 @@ export const readingState = sqliteTable('reading_state', {
     cfi: text('cfi'), // epub.js Canonical Fragment Identifier for the last read position
     farthestCfi: text('farthest_cfi'), // High-water mark: the furthest CFI ever reached
     fontSize: integer('font_size').notNull().default(15),
+    totalChars: integer('total_chars'), // Book text length from epub.js locations; computed once, immutable per file
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
     uniqueIndex('reading_state_user_file_idx').on(table.userId, table.fileId),

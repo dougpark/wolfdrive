@@ -1,0 +1,1 @@
+ALTER TABLE `reading_state` ADD `total_chars` integer;

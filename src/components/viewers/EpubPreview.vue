@@ -18,6 +18,13 @@ const farthestCfi = ref<string | null>(null)
 /** How far the reader has scrolled inside the current section, for fine-grained distance tracking. */
 const currentScrollOffset = ref(0)
 const farthestScrollOffset = ref(0)
+/** Book length in characters once locations are known; null until generated or loaded from the DB. */
+const totalChars = ref<number | null>(null)
+/** Percent of the book read at the current position; null until locations are ready. */
+const percentRead = ref<number | null>(null)
+
+/** Characters per location marker. Smaller = finer percentage granularity, more locations. */
+const CHARS_PER_LOCATION = 750
 
 const MIN_FONT_SIZE = 12
 const MAX_FONT_SIZE = 24
@@ -96,9 +103,37 @@ async function fetchReaderState() {
         }
         if (typeof state.cfi === 'string' && state.cfi) savedCfi.value = state.cfi
         if (typeof state.farthestCfi === 'string' && state.farthestCfi) farthestCfi.value = state.farthestCfi
+        if (typeof state.totalChars === 'number' && state.totalChars > 0) totalChars.value = state.totalChars
     } catch (error) {
         console.error('Failed to load reading state:', error)
     }
+}
+
+/**
+ * Generate epub.js locations (fixed-size text markers) in the background, then persist the
+ * book's character length so future loads skip generation entirely. No-op when already known.
+ */
+async function ensureLocations() {
+    if (!book || totalChars.value) {
+        updatePercent(currentCfi.value)
+        return
+    }
+    try {
+        await book.locations.generate(CHARS_PER_LOCATION)
+        totalChars.value = book.locations.length() * CHARS_PER_LOCATION
+        updatePercent(currentCfi.value)
+        persistReaderState()
+    } catch (error) {
+        console.error('Failed to generate EPUB locations:', error)
+    }
+}
+
+function updatePercent(cfi: string | null) {
+    if (!cfi || !book || !book.locations.length()) {
+        percentRead.value = null
+        return
+    }
+    percentRead.value = Math.min(100, Math.round(book.locations.percentageFromCfi(cfi) * 100))
 }
 
 /** Debounced upsert: scrolling fires `relocated` continuously, so coalesce into one write. */
@@ -113,6 +148,7 @@ function persistReaderState() {
                     cfi: currentCfi.value ?? savedCfi.value,
                     farthestCfi: farthestCfi.value,
                     fontSize: fontSize.value,
+                    totalChars: totalChars.value ?? undefined,
                 }),
             })
             savedCfi.value = currentCfi.value ?? savedCfi.value
@@ -135,6 +171,7 @@ function handleRelocated(location: any) {
         // Same section as the mark: track the deepest scroll point within it.
         farthestScrollOffset.value = Math.max(farthestScrollOffset.value, currentScrollOffset.value)
     }
+    updatePercent(cfi)
     persistReaderState()
 }
 
@@ -170,6 +207,8 @@ async function loadBook() {
     farthestCfi.value = null
     currentScrollOffset.value = 0
     farthestScrollOffset.value = 0
+    totalChars.value = null
+    percentRead.value = null
 
     try {
         await fetchReaderState()
@@ -192,6 +231,9 @@ async function loadBook() {
         rendition.on('relocated', handleRelocated)
         // Resume at the saved CFI when one exists, otherwise open the first section.
         await rendition.display(savedCfi.value || undefined)
+        // Fire-and-forget: locations generation is expensive on large books, so it runs
+        // in the background and the percentage readout appears once it finishes.
+        ensureLocations()
     } catch (error) {
         console.error('Failed to load EPUB preview:', error)
         loadError.value = 'Unable to load this EPUB preview.'
@@ -230,6 +272,13 @@ onBeforeUnmount(() => {
                     title="Jump to beginning" @click="jumpToBeginning">
                     <SkipBack class="h-4 w-4" />
                 </button>
+                <template v-if="percentRead !== null">
+                    <div class="mx-1 h-4 w-px bg-gemini-border"></div>
+                    <span class="px-1 font-mono text-xs text-gemini-subtext"
+                        :title="totalChars ? `~${totalChars.toLocaleString()} characters` : undefined">
+                        {{ percentRead }}%
+                    </span>
+                </template>
             </div>
             <span class="text-xs text-gemini-subtext">EPUB Preview</span>
         </div>
