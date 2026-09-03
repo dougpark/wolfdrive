@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import ePub from 'epubjs'
+import ePub, { EpubCFI } from 'epubjs'
 import { Minus, Plus, SkipBack, ArrowRight } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -15,9 +15,9 @@ const fontSize = ref(15)
 const savedCfi = ref<string | null>(null)
 const currentCfi = ref<string | null>(null)
 const farthestCfi = ref<string | null>(null)
-/** Spine index of the current and farthest positions, for high-water-mark comparison. */
-const currentSpineIndex = ref(-1)
-const farthestSpineIndex = ref(-1)
+/** How far the reader has scrolled inside the current section, for fine-grained distance tracking. */
+const currentScrollOffset = ref(0)
+const farthestScrollOffset = ref(0)
 
 const MIN_FONT_SIZE = 12
 const MAX_FONT_SIZE = 24
@@ -30,10 +30,24 @@ const fontStack = `Inter, Roboto, -apple-system, 'Segoe UI', Helvetica, Arial, s
 /** Comfortable reading measure (~65–75 characters per line at 15px). */
 const readingWidth = '720px'
 
-/** Show the banner when browsing behind the high-water mark. */
-const isBehindFarthest = computed(
-    () => farthestCfi.value !== null && currentSpineIndex.value >= 0 && currentSpineIndex.value < farthestSpineIndex.value,
-)
+/** The reader is behind its high-water mark when its character position trails the farthest CFI. */
+const isBehindFarthest = computed(() => {
+    if (!farthestCfi.value || !currentCfi.value) return false
+    const cmp = compareCfi(currentCfi.value, farthestCfi.value)
+    if (cmp < 0) return true
+    // Same section: also flag meaningful backscrolls (~a page) so the banner reacts promptly.
+    if (cmp === 0 && currentScrollOffset.value < farthestScrollOffset.value - 400) return true
+    return false
+})
+
+/** True character-position comparison via epub.js (TOC CFIs compare correctly, unlike spine indexes). */
+function compareCfi(a: string, b: string): number {
+    try {
+        return new EpubCFI().compare(a, b)
+    } catch {
+        return 0
+    }
+}
 
 function applyTheme() {
     const textColor = props.isDark ? '#e3e3e3' : '#1f1f1f'
@@ -87,14 +101,6 @@ async function fetchReaderState() {
     }
 }
 
-/** Spine index for a CFI (its `/N/` step maps to `spineItems[N - 2]`), used to compare positions. */
-function spineIndexForCfi(cfi: string | null): number {
-    if (!cfi || !book) return -1
-    const match = /\/(\d+)(?:\[|$)/.exec(cfi)
-    if (!match) return -1
-    return parseInt(match[1], 10) - 2
-}
-
 /** Debounced upsert: scrolling fires `relocated` continuously, so coalesce into one write. */
 function persistReaderState() {
     if (saveTimer) clearTimeout(saveTimer)
@@ -120,13 +126,22 @@ function handleRelocated(location: any) {
     const cfi = location?.start?.cfi
     if (!cfi) return
     currentCfi.value = cfi
-    currentSpineIndex.value = spineIndexForCfi(cfi)
-    // Advance the high-water mark only when the reader pushes into new sections.
-    if (currentSpineIndex.value > farthestSpineIndex.value) {
-        farthestSpineIndex.value = currentSpineIndex.value
+    currentScrollOffset.value = getScrollOffset()
+    // Advance the high-water mark only at genuinely new character positions.
+    if (!farthestCfi.value || compareCfi(cfi, farthestCfi.value) > 0) {
         farthestCfi.value = cfi
+        farthestScrollOffset.value = currentScrollOffset.value
+    } else if (compareCfi(cfi, farthestCfi.value) === 0) {
+        // Same section as the mark: track the deepest scroll point within it.
+        farthestScrollOffset.value = Math.max(farthestScrollOffset.value, currentScrollOffset.value)
     }
     persistReaderState()
+}
+
+/** Scroll position inside the epub.js reader's internal scrolling container. */
+function getScrollOffset(): number {
+    const scroller = viewerContainer.value?.querySelector('.epub-container > div') as HTMLElement | null
+    return scroller?.scrollTop ?? 0
 }
 
 function changeFontSize(delta: number) {
@@ -153,8 +168,8 @@ async function loadBook() {
     savedCfi.value = null
     currentCfi.value = null
     farthestCfi.value = null
-    currentSpineIndex.value = -1
-    farthestSpineIndex.value = -1
+    currentScrollOffset.value = 0
+    farthestScrollOffset.value = 0
 
     try {
         await fetchReaderState()
@@ -175,8 +190,6 @@ async function loadBook() {
         })
         applyTheme()
         rendition.on('relocated', handleRelocated)
-        // Seed the comparison indexes from the restored state.
-        farthestSpineIndex.value = spineIndexForCfi(farthestCfi.value)
         // Resume at the saved CFI when one exists, otherwise open the first section.
         await rendition.display(savedCfi.value || undefined)
     } catch (error) {
