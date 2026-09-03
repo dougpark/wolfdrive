@@ -8,6 +8,7 @@ import { scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
+import { readingState } from './db/schema'
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL
     ? process.env.OLLAMA_BASE_URL.replace(/\/+$/, '')
@@ -340,6 +341,49 @@ app.get('/api/stats', async (c) => {
     }, {} as Record<string, number>)
 
     return c.json(counts)
+})
+
+// GET /api/reading-state/:fileId - Fetch saved EPUB reader state (CFI position + font size)
+app.get('/api/reading-state/:fileId', async (c) => {
+    const userId = c.get('userId')
+    const fileId = c.req.param('fileId')
+
+    const [row] = await db
+        .select()
+        .from(readingState)
+        .where(and(eq(readingState.userId, userId), eq(readingState.fileId, fileId)))
+        .limit(1)
+
+    return c.json(row ?? { cfi: null, fontSize: null })
+})
+
+// PUT /api/reading-state/:fileId - Upsert saved EPUB reader state
+app.put('/api/reading-state/:fileId', async (c) => {
+    const userId = c.get('userId')
+    const fileId = c.req.param('fileId')
+    const body = await c.req.json<{ cfi?: string | null; fontSize?: number }>()
+
+    const now = new Date().toISOString()
+    const updates: { cfi?: string | null; fontSize?: number; updatedAt: string } = { updatedAt: now }
+    if (body.cfi !== undefined) updates.cfi = body.cfi
+    if (body.fontSize !== undefined) updates.fontSize = body.fontSize
+
+    await db
+        .insert(readingState)
+        .values({
+            id: crypto.randomUUID(),
+            userId,
+            fileId,
+            cfi: body.cfi ?? null,
+            fontSize: body.fontSize ?? 15,
+            updatedAt: now,
+        })
+        .onConflictDoUpdate({
+            target: [readingState.userId, readingState.fileId],
+            set: updates,
+        })
+
+    return c.json({ ok: true })
 })
 
 // App Settings API Endpoints

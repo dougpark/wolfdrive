@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm'
 
 // 0. Core Media File Metadata
@@ -69,6 +69,18 @@ export const appSettings = sqliteTable('app_settings', {
     value: text('value').notNull(), // JSON string blob
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 })
+
+// 4. eBook Reader State (per user, per file)
+export const readingState = sqliteTable('reading_state', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    fileId: text('file_id').notNull().references(() => mediaFiles.id, { onDelete: 'cascade' }),
+    cfi: text('cfi'), // epub.js Canonical Fragment Identifier for the last read position
+    fontSize: integer('font_size').notNull().default(15),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    uniqueIndex('reading_state_user_file_idx').on(table.userId, table.fileId),
+])
 
 // 3. Example: User-bound eBook Progress
 // export const ebookProgress = sqliteTable('ebook_progress', {

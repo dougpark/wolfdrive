@@ -12,7 +12,8 @@
   "vetur.format.defaultFormatter.html": "js-beautify-html", // If legacy Vetur exists
   "vue.inlayHints.missingProps": true,
   "chat.tools.terminal.autoApprove": {
-    "bun": true
+    "bun": true,
+    "bunx": true
   },
   // help with remote vite dev server
   "remote.portsAttributes": {
