@@ -71,6 +71,13 @@
       "when": 1788470625871,
       "tag": "0009_brown_stone_men",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788471142688,
+      "tag": "0010_smart_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

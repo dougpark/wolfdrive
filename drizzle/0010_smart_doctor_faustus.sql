@@ -1,0 +1,1 @@
+ALTER TABLE `reading_state` ADD `percent_read` integer;

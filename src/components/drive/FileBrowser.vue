@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, useSlots, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
 import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
@@ -16,6 +16,14 @@ import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X } fr
 const props = withDefaults(defineProps<{ library?: LibraryCategoryId }>(), {
     library: 'files',
 })
+
+/** Views opt into extra list-view columns by providing the column-header/column-cell slots. */
+const slots = useSlots()
+const hasExtraColumns = computed(() => !!slots['column-header'] && !!slots['column-cell'])
+
+const emit = defineEmits<{
+    (e: 'files-loaded', files: MediaFile[]): void
+}>()
 
 type SortKey = 'name' | 'type' | 'modified' | 'size'
 
@@ -95,6 +103,7 @@ async function fetchFiles() {
 
         const res = await fetch(`/api/files?${params.toString()}`)
         files.value = await res.json()
+        emit('files-loaded', files.value)
     } catch (err) {
         console.error('Failed to load files:', err)
     } finally {
@@ -237,7 +246,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
+                            }}</strong> results
                         <span v-if="activeCategories.length"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -327,6 +336,7 @@ onMounted(() => {
                     </div>
 
                     <div class="flex shrink-0 items-center gap-4">
+                        <slot name="column-header"></slot>
                         <button v-for="column in SORT_COLUMNS" :key="column.key" type="button" :class="[
                             column.class,
                             sortKey === column.key ? 'font-semibold text-gemini-blue' : '',
@@ -360,6 +370,7 @@ onMounted(() => {
                     </div>
 
                     <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
+                        <slot v-if="hasExtraColumns" name="column-cell" :file="file"></slot>
                         <span class="uppercase font-mono w-12 text-right">{{ file.extension }}</span>
                         <span class="hidden sm:block w-24 text-right">{{ formatDate(file.mtimeMs) }}</span>
                         <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>

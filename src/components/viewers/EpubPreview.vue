@@ -20,11 +20,8 @@ const currentScrollOffset = ref(0)
 const farthestScrollOffset = ref(0)
 /** Book length in characters once locations are known; null until generated or loaded from the DB. */
 const totalChars = ref<number | null>(null)
-/** Percent of the book read at the current position; null until locations are ready. */
+/** Percent of the book read at the current position. */
 const percentRead = ref<number | null>(null)
-
-/** Characters per location marker. Smaller = finer percentage granularity, more locations. */
-const CHARS_PER_LOCATION = 750
 
 const MIN_FONT_SIZE = 12
 const MAX_FONT_SIZE = 24
@@ -110,30 +107,38 @@ async function fetchReaderState() {
 }
 
 /**
- * Generate epub.js locations (fixed-size text markers) in the background, then persist the
- * book's character length so future loads skip generation entirely. No-op when already known.
+ * Generate epub.js locations in the background to learn the book's character length, then
+ * persist it so future loads (and the BooksView tooltip) can skip generation. Percent does
+ * not depend on this — it is computed from the CFI directly — so failure here is harmless.
  */
 async function ensureLocations() {
-    if (!book || totalChars.value) {
-        updatePercent(currentCfi.value)
-        return
-    }
+    if (!book || totalChars.value) return
     try {
-        await book.locations.generate(CHARS_PER_LOCATION)
-        totalChars.value = book.locations.length() * CHARS_PER_LOCATION
-        updatePercent(currentCfi.value)
+        await book.locations.generate(750)
+        totalChars.value = book.locations.length() * 750
         persistReaderState()
     } catch (error) {
         console.error('Failed to generate EPUB locations:', error)
     }
 }
 
+/**
+ * Percent read = position of the CFI's spine section within the book's reading order.
+ * Pure CFI math: no locations generation required, works instantly for every book.
+ */
 function updatePercent(cfi: string | null) {
-    if (!cfi || !book || !book.locations.length()) {
+    if (!cfi || !book) {
         percentRead.value = null
         return
     }
-    percentRead.value = Math.min(100, Math.round(book.locations.percentageFromCfi(cfi) * 100))
+    const match = /\/(\d+)(?:\[|!|$)/.exec(cfi)
+    const total = book.spine?.spineItems?.length ?? 0
+    if (!match || total === 0) {
+        percentRead.value = null
+        return
+    }
+    const index = Math.max(0, parseInt(match[1], 10) / 2 - 1)
+    percentRead.value = Math.min(100, Math.round((index / total) * 100))
 }
 
 /** Debounced upsert: scrolling fires `relocated` continuously, so coalesce into one write. */
@@ -149,6 +154,7 @@ function persistReaderState() {
                     farthestCfi: farthestCfi.value,
                     fontSize: fontSize.value,
                     totalChars: totalChars.value ?? undefined,
+                    percentRead: percentRead.value ?? undefined,
                 }),
             })
             savedCfi.value = currentCfi.value ?? savedCfi.value
@@ -231,8 +237,10 @@ async function loadBook() {
         rendition.on('relocated', handleRelocated)
         // Resume at the saved CFI when one exists, otherwise open the first section.
         await rendition.display(savedCfi.value || undefined)
-        // Fire-and-forget: locations generation is expensive on large books, so it runs
-        // in the background and the percentage readout appears once it finishes.
+        // Show the restored percentage immediately (from the DB, before any relocation).
+        updatePercent(savedCfi.value)
+        // Fire-and-forget: locations generation is expensive on large books; it only fills in
+        // totalChars for the tooltip/BooksView and is not needed for the percentage itself.
         ensureLocations()
     } catch (error) {
         console.error('Failed to load EPUB preview:', error)

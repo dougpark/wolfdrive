@@ -361,14 +361,15 @@ app.get('/api/reading-state/:fileId', async (c) => {
 app.put('/api/reading-state/:fileId', async (c) => {
     const userId = c.get('userId')
     const fileId = c.req.param('fileId')
-    const body = await c.req.json<{ cfi?: string | null; farthestCfi?: string | null; fontSize?: number; totalChars?: number }>()
+    const body = await c.req.json<{ cfi?: string | null; farthestCfi?: string | null; fontSize?: number; totalChars?: number; percentRead?: number }>()
 
     const now = new Date().toISOString()
-    const updates: { cfi?: string | null; farthestCfi?: string | null; fontSize?: number; totalChars?: number; updatedAt: string } = { updatedAt: now }
+    const updates: { cfi?: string | null; farthestCfi?: string | null; fontSize?: number; totalChars?: number; percentRead?: number; updatedAt: string } = { updatedAt: now }
     if (body.cfi !== undefined) updates.cfi = body.cfi
     if (body.farthestCfi !== undefined) updates.farthestCfi = body.farthestCfi
     if (body.fontSize !== undefined) updates.fontSize = body.fontSize
     if (body.totalChars !== undefined) updates.totalChars = body.totalChars
+    if (body.percentRead !== undefined) updates.percentRead = body.percentRead
 
     await db
         .insert(readingState)
@@ -380,6 +381,7 @@ app.put('/api/reading-state/:fileId', async (c) => {
             farthestCfi: body.farthestCfi ?? null,
             fontSize: body.fontSize ?? 15,
             totalChars: body.totalChars ?? null,
+            percentRead: body.percentRead ?? null,
             updatedAt: now,
         })
         .onConflictDoUpdate({
@@ -388,6 +390,20 @@ app.put('/api/reading-state/:fileId', async (c) => {
         })
 
     return c.json({ ok: true })
+})
+
+// GET /api/reading-state?ids=a,b,c - Batch progress lookup for library list views
+app.get('/api/reading-state', async (c) => {
+    const userId = c.get('userId')
+    const ids = (c.req.query('ids') ?? '').split(',').filter(Boolean).slice(0, 1000)
+    if (ids.length === 0) return c.json([])
+
+    const rows = await db
+        .select({ fileId: readingState.fileId, percentRead: readingState.percentRead })
+        .from(readingState)
+        .where(and(eq(readingState.userId, userId), inArray(readingState.fileId, ids)))
+
+    return c.json(rows)
 })
 
 // App Settings API Endpoints
