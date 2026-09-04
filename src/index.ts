@@ -574,6 +574,93 @@ app.put('/api/files/:id/tags', async (c) => {
     return c.json(rows)
 })
 
+// GET /api/tags/usage?ids=a,b,c - Per-tag usage counts across a batch of files (drives the tri-state batch tag panel)
+app.get('/api/tags/usage', async (c) => {
+    const userId = c.get('userId')
+    const fileIds = (c.req.query('ids') ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+
+    if (fileIds.length === 0) {
+        return c.json([])
+    }
+
+    const rows = await db
+        .select({
+            id: tags.id,
+            name: tags.name,
+            color: tags.color,
+            fileCount: sql<number>`count(distinct ${fileTags.fileId})`,
+        })
+        .from(fileTags)
+        .innerJoin(tags, eq(fileTags.tagId, tags.id))
+        .innerJoin(mediaFiles, eq(fileTags.fileId, mediaFiles.id))
+        .where(and(eq(mediaFiles.userId, userId), inArray(fileTags.fileId, fileIds)))
+        .groupBy(tags.id)
+        .orderBy(asc(tags.name))
+
+    return c.json(rows.map((row) => ({ ...row, fileCount: Number(row.fileCount) })))
+})
+
+// POST /api/files/tags/add - Add one tag to every file in a batch (idempotent, skips files that already have it)
+app.post('/api/files/tags/add', async (c) => {
+    const userId = c.get('userId')
+    const body = await c.req.json<{ fileIds?: unknown; tagId?: unknown }>()
+
+    const tagId = typeof body.tagId === 'string' ? body.tagId : ''
+    const fileIds = Array.isArray(body.fileIds) ? body.fileIds.filter((v): v is string => typeof v === 'string') : []
+    if (!tagId || fileIds.length === 0) {
+        return c.json({ error: 'tagId and fileIds are required' }, 400)
+    }
+
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).limit(1)
+    if (!tag) {
+        return c.json({ error: 'Tag not found' }, 404)
+    }
+
+    const ownedFiles = await db
+        .select({ id: mediaFiles.id })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.userId, userId), inArray(mediaFiles.id, fileIds)))
+    const ownedIds = ownedFiles.map((f) => f.id)
+
+    if (ownedIds.length) {
+        db.insert(fileTags).values(ownedIds.map((fileId) => ({ fileId, tagId }))).onConflictDoNothing().run()
+    }
+
+    return c.json({ success: true, fileCount: ownedIds.length })
+})
+
+// POST /api/files/tags/remove - Remove one tag from every file in a batch
+app.post('/api/files/tags/remove', async (c) => {
+    const userId = c.get('userId')
+    const body = await c.req.json<{ fileIds?: unknown; tagId?: unknown }>()
+
+    const tagId = typeof body.tagId === 'string' ? body.tagId : ''
+    const fileIds = Array.isArray(body.fileIds) ? body.fileIds.filter((v): v is string => typeof v === 'string') : []
+    if (!tagId || fileIds.length === 0) {
+        return c.json({ error: 'tagId and fileIds are required' }, 400)
+    }
+
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).limit(1)
+    if (!tag) {
+        return c.json({ error: 'Tag not found' }, 404)
+    }
+
+    const ownedFiles = await db
+        .select({ id: mediaFiles.id })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.userId, userId), inArray(mediaFiles.id, fileIds)))
+    const ownedIds = ownedFiles.map((f) => f.id)
+
+    if (ownedIds.length) {
+        db.delete(fileTags).where(and(eq(fileTags.tagId, tagId), inArray(fileTags.fileId, ownedIds))).run()
+    }
+
+    return c.json({ success: true, fileCount: ownedIds.length })
+})
+
 // GET /api/stream/:id - Stream an indexed file for browser previews
 app.get('/api/stream/:id', async (c) => {
     const userId = c.get('userId')

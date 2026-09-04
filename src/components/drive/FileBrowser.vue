@@ -7,6 +7,7 @@ import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
 import CategoryPickerModal from '@/components/common/CategoryPickerModal.vue'
 import TagPickerModal from '@/components/common/TagPickerModal.vue'
 import TagFilterDropdown from '@/components/common/TagFilterDropdown.vue'
+import BatchTagPanel from '@/components/common/BatchTagPanel.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import type { MediaFile } from '@/types/media'
 import {
@@ -15,7 +16,7 @@ import {
     getCategoryIcon,
     type LibraryCategoryId,
 } from '@/config/libraryCategories'
-import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X } from 'lucide-vue-next'
+import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X, CheckSquare, Square, Tags as TagsIcon } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ library?: LibraryCategoryId }>(), {
     library: 'files',
@@ -97,6 +98,27 @@ const scopeLabel = computed(() =>
 const editingFile = ref<MediaFile | null>(null)
 /** File currently being re-tagged, or null when the modal is closed. */
 const editingTagsFile = ref<MediaFile | null>(null)
+/** Ids of files checked for batch actions. */
+const selectedFileIds = ref<Set<string>>(new Set())
+const isBatchTagPanelOpen = ref(false)
+const isAllSelected = computed(() =>
+    files.value.length > 0 && selectedFileIds.value.size === files.value.length,
+)
+
+function toggleFileSelection(id: string) {
+    const next = new Set(selectedFileIds.value)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    selectedFileIds.value = next
+}
+
+function selectAll() {
+    selectedFileIds.value = new Set(files.value.map((f) => f.id))
+}
+
+function deselectAll() {
+    selectedFileIds.value = new Set()
+}
 
 async function handleCategoriesSaved() {
     editingFile.value = null
@@ -105,6 +127,10 @@ async function handleCategoriesSaved() {
 
 async function handleTagsSaved() {
     editingTagsFile.value = null
+    await fetchFiles()
+}
+
+async function handleBatchTagsChanged() {
     await fetchFiles()
 }
 
@@ -140,6 +166,9 @@ async function fetchFiles() {
         const res = await fetch(`/api/files?${params.toString()}`)
         files.value = await res.json()
         emit('files-loaded', files.value)
+        // Drop selections for files no longer in the result set (filter/search changed).
+        const visibleIds = new Set(files.value.map((f) => f.id))
+        selectedFileIds.value = new Set([...selectedFileIds.value].filter((id) => visibleIds.has(id)))
     } catch (err) {
         console.error('Failed to load files:', err)
     } finally {
@@ -255,6 +284,21 @@ onMounted(() => {
                 </div>
 
                 <div class="flex items-center gap-2 self-end sm:self-auto">
+                    <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
+                        <button type="button"
+                            class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="files.length === 0 || isAllSelected" title="Select all" aria-label="Select all"
+                            @click="selectAll">
+                            <CheckSquare class="h-4 w-4" />
+                        </button>
+                        <button type="button"
+                            class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="selectedFileIds.size === 0" title="Deselect all" aria-label="Deselect all"
+                            @click="deselectAll">
+                            <Square class="h-4 w-4" />
+                        </button>
+                    </div>
+
                     <TagFilterDropdown v-model:selected-ids="selectedTagIds" v-model:match-mode="tagMatchMode" />
 
                     <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
@@ -289,12 +333,33 @@ onMounted(() => {
                 </button>
             </div>
 
+            <!-- Batch Action Bar -->
+            <div v-if="selectedFileIds.size > 0"
+                class="mb-5 flex items-center justify-between gap-4 rounded-xl border border-gemini-blue/30 bg-gemini-blue/10 px-4 py-2.5">
+                <span class="text-sm font-medium text-gemini-blue">
+                    {{ selectedFileIds.size }} selected
+                </span>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                        class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
+                        @click="isBatchTagPanelOpen = true">
+                        <TagsIcon class="h-4 w-4" />
+                        Manage tags
+                    </button>
+                    <button type="button"
+                        class="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gemini-subtext transition-colors hover:text-gemini-text"
+                        title="Clear selection" aria-label="Clear selection" @click="deselectAll">
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+            </div>
+
             <!-- Contextual Count Subheader -->
             <div class="flex items-center justify-between text-xs text-gemini-subtext mb-5 px-1 font-medium">
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
+                            }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -343,8 +408,11 @@ onMounted(() => {
                 class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 transition-opacity duration-150"
                 :class="{ 'opacity-50': isLoading }">
                 <div v-for="file in files" :key="file.id"
-                    class="group bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
+                    class="group relative bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
                     @dblclick="openPreview(file, files)">
+                    <input type="checkbox" :checked="selectedFileIds.has(file.id)"
+                        class="absolute left-3 top-3 z-10 h-4 w-4 cursor-pointer accent-gemini-blue"
+                        :aria-label="`Select ${file.filename}`" @click.stop="toggleFileSelection(file.id)" />
                     <div
                         class="h-24 w-full bg-gemini-surface rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
                         <component :is="getCategoryIcon(file.mediaCategory)"
@@ -372,7 +440,9 @@ onMounted(() => {
                 <div
                     class="flex items-center justify-between bg-gemini-surface/60 px-5 py-2 text-xs font-medium text-gemini-subtext">
                     <div class="flex min-w-0 flex-1 items-center gap-3.5 pr-4">
-                        <span class="h-5 w-5 shrink-0"></span>
+                        <input type="checkbox" :checked="isAllSelected"
+                            class="h-4 w-4 shrink-0 cursor-pointer accent-gemini-blue" aria-label="Select all"
+                            @click="isAllSelected ? deselectAll() : selectAll()" />
                         <button type="button"
                             class="flex cursor-pointer items-center gap-1 transition-colors hover:text-gemini-text"
                             :class="{ 'font-semibold text-gemini-blue': sortKey === 'name' }"
@@ -405,6 +475,9 @@ onMounted(() => {
                     class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
                     @dblclick="openPreview(file, files)">
                     <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-4">
+                        <input type="checkbox" :checked="selectedFileIds.has(file.id)"
+                            class="h-4 w-4 shrink-0 cursor-pointer accent-gemini-blue"
+                            :aria-label="`Select ${file.filename}`" @click.stop="toggleFileSelection(file.id)" />
                         <component :is="getCategoryIcon(file.mediaCategory)"
                             class="h-5 w-5 text-gemini-blue shrink-0" />
                         <div class="min-w-0 flex-1">
@@ -454,5 +527,8 @@ onMounted(() => {
 
         <TagPickerModal v-if="editingTagsFile" :file="editingTagsFile" @close="editingTagsFile = null"
             @saved="handleTagsSaved" />
+
+        <BatchTagPanel v-if="isBatchTagPanelOpen" :file-ids="[...selectedFileIds]" @close="isBatchTagPanelOpen = false"
+            @changed="handleBatchTagsChanged" />
     </div>
 </template>
