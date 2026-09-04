@@ -19,8 +19,9 @@ import {
 } from '@/config/libraryCategories'
 import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X, CheckSquare, Square, Tags as TagsIcon, Boxes } from 'lucide-vue-next'
 
-const props = withDefaults(defineProps<{ library?: LibraryCategoryId }>(), {
+const props = withDefaults(defineProps<{ library?: LibraryCategoryId; scopeTagIds?: string[] }>(), {
     library: 'files',
+    scopeTagIds: () => [],
 })
 
 /** Views opt into extra list-view columns by providing the column-header/column-cell slots. */
@@ -161,8 +162,9 @@ async function fetchFiles() {
             params.append('category', selectedFilter.value)
         }
         if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
-        if (selectedTagIds.value.size) {
-            params.append('tags', [...selectedTagIds.value].join(','))
+        const scopedTagIds = new Set([...props.scopeTagIds, ...selectedTagIds.value])
+        if (scopedTagIds.size) {
+            params.append('tags', [...scopedTagIds].join(','))
             params.append('tagMode', tagMatchMode.value)
         }
         params.append('sort', sortKey.value)
@@ -245,6 +247,8 @@ watch(
         fetchFiles()
     },
 )
+
+watch(() => props.scopeTagIds, fetchFiles, { deep: true })
 
 watch(selectedFilter, fetchFiles)
 watch(selectedTagIds, fetchFiles, { deep: true })
@@ -371,7 +375,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
+                            }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>

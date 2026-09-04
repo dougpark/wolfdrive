@@ -14,6 +14,8 @@ import SettingsView from '../views/SettingsView.vue'
 import AboutView from '../views/AboutView.vue'
 import PreviewView from '../views/PreviewView.vue'
 import TagsView from '../views/TagsView.vue'
+import ProjectsView from '../views/ProjectsView.vue'
+import ProjectView from '../views/ProjectView.vue'
 
 export const router = createRouter({
     history: createWebHistory(),
@@ -34,5 +36,7 @@ export const router = createRouter({
         { path: '/about', component: AboutView },
         { path: '/preview/:id', component: PreviewView },
         { path: '/tags', component: TagsView },
+        { path: '/projects', component: ProjectsView },
+        { path: '/projects/:id', component: ProjectView },
     ],
 })

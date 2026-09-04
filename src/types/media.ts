@@ -4,6 +4,21 @@ export interface Tag {
     color: string | null
 }
 
+export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived'
+
+export interface Project {
+    tagId: string
+    name: string
+    slug: string
+    description: string | null
+    status: ProjectStatus
+    dueDate: string | null
+    customMetadata: Record<string, unknown> | null
+    fileCount: number
+    createdAt: string | null
+    updatedAt: string | null
+}
+
 export interface MediaFile {
     id: string
     filename: string

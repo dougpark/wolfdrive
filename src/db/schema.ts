@@ -78,6 +78,21 @@ export const tags = sqliteTable('tags', {
     index('tags_user_id_idx').on(table.userId),
 ])
 
+// Project metadata extends a tag without changing the file membership model.
+export const projects = sqliteTable('projects', {
+    tagId: text('tag_id').primaryKey().references(() => tags.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    description: text('description'),
+    status: text('status').notNull().default('active'),
+    dueDate: text('due_date'),
+    customMetadata: text('custom_metadata', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    index('projects_user_status_idx').on(table.userId, table.status),
+    index('projects_user_due_date_idx').on(table.userId, table.dueDate),
+])
+
 // 3c. File <-> Tag join. Composite unique index also covers "tags for file" lookups;
 // the standalone tag_id index is what makes "files with tag X" filtering fast at 100k+ files.
 export const fileTags = sqliteTable('file_tags', {

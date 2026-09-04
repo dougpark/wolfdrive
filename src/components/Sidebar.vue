@@ -18,7 +18,8 @@ import {
     Sparkles,
     Tag,
     User,
-    Shield
+    Shield,
+    Briefcase,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -139,6 +140,16 @@ const categories = [
 
         <!-- Category Nav Links -->
         <nav class="flex flex-col gap-1">
+            <RouterLink to="/projects"
+                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="[
+                    route.path.startsWith('/projects')
+                        ? 'bg-gemini-blue/10 text-gemini-blue font-semibold'
+                        : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'
+                ]">
+                <Briefcase class="h-4 w-4 shrink-0" />
+                <span>Projects</span>
+            </RouterLink>
+
             <RouterLink v-for="cat in categories" :key="cat.path" :to="cat.path"
                 class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="[
                     route.path.startsWith(cat.path)

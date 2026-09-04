@@ -9,7 +9,7 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
-import { tags, fileTags } from './db/schema'
+import { tags, fileTags, projects } from './db/schema'
 import {
     CUSTOM_ONLY_LIBRARY_IDS,
     LIBRARY_CATEGORY_MIME_MAP,
@@ -586,6 +586,152 @@ app.delete('/api/tags/:id', async (c) => {
         return c.json({ error: 'Tag not found' }, 404)
     }
     return c.json({ success: true })
+})
+
+const PROJECT_STATUSES = ['active', 'paused', 'completed', 'archived'] as const
+type ProjectStatus = typeof PROJECT_STATUSES[number]
+
+function isProjectStatus(value: unknown): value is ProjectStatus {
+    return typeof value === 'string' && PROJECT_STATUSES.includes(value as ProjectStatus)
+}
+
+async function findProject(tagId: string, userId: string) {
+    const [project] = await db
+        .select({
+            tagId: projects.tagId,
+            name: tags.name,
+            slug: tags.slug,
+            description: projects.description,
+            status: projects.status,
+            dueDate: projects.dueDate,
+            customMetadata: projects.customMetadata,
+            fileCount: sql<number>`count(distinct ${fileTags.fileId})`,
+            createdAt: projects.createdAt,
+            updatedAt: projects.updatedAt,
+        })
+        .from(projects)
+        .innerJoin(tags, eq(projects.tagId, tags.id))
+        .leftJoin(fileTags, eq(fileTags.tagId, projects.tagId))
+        .where(and(eq(projects.tagId, tagId), eq(projects.userId, userId)))
+        .groupBy(projects.tagId, tags.id)
+        .limit(1)
+
+    return project ? { ...project, fileCount: Number(project.fileCount) } : null
+}
+
+// GET /api/projects - List project metadata with file counts
+app.get('/api/projects', async (c) => {
+    const userId = c.get('userId')
+    const search = c.req.query('search')?.trim()
+    const status = c.req.query('status')
+    const conditions = [eq(projects.userId, userId)]
+
+    if (isProjectStatus(status)) conditions.push(eq(projects.status, status))
+    if (search) {
+        const pattern = `%${search}%`
+        conditions.push(or(like(tags.name, pattern), like(projects.description, pattern))!)
+    }
+
+    const rows = await db
+        .select({
+            tagId: projects.tagId,
+            name: tags.name,
+            slug: tags.slug,
+            description: projects.description,
+            status: projects.status,
+            dueDate: projects.dueDate,
+            customMetadata: projects.customMetadata,
+            fileCount: sql<number>`count(distinct ${fileTags.fileId})`,
+            createdAt: projects.createdAt,
+            updatedAt: projects.updatedAt,
+        })
+        .from(projects)
+        .innerJoin(tags, eq(projects.tagId, tags.id))
+        .leftJoin(fileTags, eq(fileTags.tagId, projects.tagId))
+        .where(and(...conditions))
+        .groupBy(projects.tagId, tags.id)
+        .orderBy(asc(tags.name))
+
+    return c.json(rows.map((row) => ({ ...row, fileCount: Number(row.fileCount) })))
+})
+
+// POST /api/projects - Create a project and its backing tag atomically
+app.post('/api/projects', async (c) => {
+    const userId = c.get('userId')
+    const body = await c.req.json<{ name?: unknown; description?: unknown; status?: unknown; dueDate?: unknown }>()
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const slug = slugifyTag(name)
+    const status = body.status ?? 'active'
+
+    if (!name || !slug) return c.json({ error: 'name is required' }, 400)
+    if (!isProjectStatus(status)) return c.json({ error: 'Invalid project status' }, 400)
+
+    const [existingTag] = await db.select().from(tags).where(and(eq(tags.userId, userId), eq(tags.slug, slug))).limit(1)
+    if (existingTag) {
+        const existingProject = await findProject(existingTag.id, userId)
+        if (existingProject) return c.json({ error: 'A project with that name already exists' }, 409)
+    }
+
+    const tagId = existingTag?.id ?? `tag_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
+    db.transaction((tx) => {
+        if (!existingTag) tx.insert(tags).values({ id: tagId, userId, name, slug }).run()
+        tx.insert(projects).values({
+            tagId,
+            userId,
+            description: typeof body.description === 'string' ? body.description.trim() || null : null,
+            status,
+            dueDate: typeof body.dueDate === 'string' && body.dueDate ? body.dueDate : null,
+        }).run()
+    })
+
+    return c.json(await findProject(tagId, userId), 201)
+})
+
+// GET /api/projects/:id - Fetch one project with its current file count
+app.get('/api/projects/:id', async (c) => {
+    const project = await findProject(c.req.param('id'), c.get('userId'))
+    return project ? c.json(project) : c.json({ error: 'Project not found' }, 404)
+})
+
+// PATCH /api/projects/:id - Update project metadata and rename its backing tag
+app.patch('/api/projects/:id', async (c) => {
+    const userId = c.get('userId')
+    const tagId = c.req.param('id')
+    const body = await c.req.json<{ name?: unknown; description?: unknown; status?: unknown; dueDate?: unknown }>()
+    const current = await findProject(tagId, userId)
+    if (!current) return c.json({ error: 'Project not found' }, 404)
+
+    const name = body.name === undefined ? current.name : typeof body.name === 'string' ? body.name.trim() : ''
+    const status = body.status === undefined ? current.status : body.status
+    if (!name || !isProjectStatus(status)) return c.json({ error: 'Invalid project update' }, 400)
+
+    const slug = slugifyTag(name)
+    const [conflict] = await db.select({ id: tags.id }).from(tags)
+        .where(and(eq(tags.userId, userId), eq(tags.slug, slug))).limit(1)
+    if (conflict && conflict.id !== tagId) return c.json({ error: 'A tag with that name already exists' }, 409)
+
+    db.transaction((tx) => {
+        tx.update(tags).set({ name, slug }).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).run()
+        tx.update(projects).set({
+            description: body.description === undefined ? current.description : typeof body.description === 'string' ? body.description.trim() || null : null,
+            status,
+            dueDate: body.dueDate === undefined ? current.dueDate : typeof body.dueDate === 'string' && body.dueDate ? body.dueDate : null,
+            updatedAt: sql`CURRENT_TIMESTAMP`,
+        }).where(and(eq(projects.tagId, tagId), eq(projects.userId, userId))).run()
+    })
+
+    return c.json(await findProject(tagId, userId))
+})
+
+// DELETE /api/projects/:id - Archive instead of removing file memberships
+app.delete('/api/projects/:id', async (c) => {
+    const userId = c.get('userId')
+    const tagId = c.req.param('id')
+    const [updated] = await db.update(projects)
+        .set({ status: 'archived', updatedAt: sql`CURRENT_TIMESTAMP` })
+        .where(and(eq(projects.tagId, tagId), eq(projects.userId, userId)))
+        .returning({ tagId: projects.tagId })
+    return updated ? c.json({ success: true }) : c.json({ error: 'Project not found' }, 404)
 })
 
 // GET /api/files/:id/tags - List tags assigned to a file
