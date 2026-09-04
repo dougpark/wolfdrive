@@ -9,6 +9,7 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
+import { tags, fileTags } from './db/schema'
 import {
     CUSTOM_ONLY_LIBRARY_IDS,
     LIBRARY_CATEGORY_MIME_MAP,
@@ -234,6 +235,39 @@ app.post('/api/scan/:id', async (c) => {
     return c.json({ success: true, ...stats })
 })
 
+/** Normalizes a tag name into a case/whitespace-insensitive lookup key. */
+function slugifyTag(name: string): string {
+    return name.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/**
+ * Batch-fetches tags for a page of file ids and groups them by file id. Always called
+ * *after* the primary query has paginated, never joined before LIMIT, so a to-many
+ * relation never inflates the row count of a filtered/sorted/limited result set.
+ */
+async function attachTags(fileIds: string[]): Promise<Map<string, { id: string; name: string; color: string | null }[]>> {
+    const byFile = new Map<string, { id: string; name: string; color: string | null }[]>()
+    if (fileIds.length === 0) return byFile
+
+    const rows = await db
+        .select({
+            fileId: fileTags.fileId,
+            id: tags.id,
+            name: tags.name,
+            color: tags.color,
+        })
+        .from(fileTags)
+        .innerJoin(tags, eq(fileTags.tagId, tags.id))
+        .where(inArray(fileTags.fileId, fileIds))
+
+    for (const row of rows) {
+        const list = byFile.get(row.fileId) ?? []
+        list.push({ id: row.id, name: row.name, color: row.color })
+        byFile.set(row.fileId, list)
+    }
+    return byFile
+}
+
 // GET /api/files - Fetch indexed media files
 app.get('/api/files', async (c) => {
     const userId = c.get('userId')
@@ -244,6 +278,13 @@ app.get('/api/files', async (c) => {
     const search = c.req.query('search')
     const limitParam = c.req.query('limit')
     const limit = limitParam ? parseInt(limitParam) : 1000
+    // Comma-separated tag ids to filter by, e.g. 'tag_abc,tag_def'
+    const requestedTagIds = (c.req.query('tags') ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    // 'all' (AND, default) requires every tag; 'any' (OR) requires at least one
+    const tagMode = c.req.query('tagMode') === 'any' ? 'any' : 'all'
 
     let conditions = [eq(mediaFiles.userId, userId)]
 
@@ -288,6 +329,22 @@ app.get('/api/files', async (c) => {
         if (searchCondition) conditions.push(searchCondition)
     }
 
+    if (requestedTagIds.length > 0) {
+        if (tagMode === 'any') {
+            // Single EXISTS against the indexed tag_id column covers any-of-N tags.
+            conditions.push(
+                sql`EXISTS (SELECT 1 FROM ${fileTags} WHERE ${fileTags.fileId} = ${mediaFiles.id} AND ${fileTags.tagId} IN ${requestedTagIds})`,
+            )
+        } else {
+            // One EXISTS per tag so every tag must independently match (AND semantics).
+            for (const tagId of requestedTagIds) {
+                conditions.push(
+                    sql`EXISTS (SELECT 1 FROM ${fileTags} WHERE ${fileTags.fileId} = ${mediaFiles.id} AND ${fileTags.tagId} = ${tagId})`,
+                )
+            }
+        }
+    }
+
     const sortColumn = FILE_SORT_COLUMNS[c.req.query('sort') ?? ''] ?? mediaFiles.mtimeMs
     const sortDirection = c.req.query('dir') === 'asc' ? 'asc' : 'desc'
 
@@ -298,7 +355,10 @@ app.get('/api/files', async (c) => {
         .orderBy(sortDirection === 'asc' ? asc(sortColumn) : desc(sortColumn))
         .limit(limit)
 
-    return c.json(files)
+    const tagsByFile = await attachTags(files.map((f) => f.id))
+    const filesWithTags = files.map((f) => ({ ...f, tags: tagsByFile.get(f.id) ?? [] }))
+
+    return c.json(filesWithTags)
 })
 
 // GET /api/files/:id - Fetch metadata for a single indexed file
@@ -348,6 +408,170 @@ app.put('/api/files/:id/categories', async (c) => {
     }
 
     return c.json(updated)
+})
+
+// GET /api/tags - List all tags for the user with usage counts (drives the tag manager + autocomplete)
+app.get('/api/tags', async (c) => {
+    const userId = c.get('userId')
+
+    const rows = await db
+        .select({
+            id: tags.id,
+            name: tags.name,
+            color: tags.color,
+            fileCount: sql<number>`count(${fileTags.fileId})`,
+        })
+        .from(tags)
+        .leftJoin(fileTags, eq(fileTags.tagId, tags.id))
+        .where(eq(tags.userId, userId))
+        .groupBy(tags.id)
+        .orderBy(asc(tags.name))
+
+    return c.json(rows.map((row) => ({ ...row, fileCount: Number(row.fileCount) })))
+})
+
+// POST /api/tags - Find-or-create a tag by name (idempotent, used by inline tag creation in the picker)
+app.post('/api/tags', async (c) => {
+    const userId = c.get('userId')
+    const body = await c.req.json<{ name?: unknown }>()
+
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (!name) {
+        return c.json({ error: 'name is required' }, 400)
+    }
+    const slug = slugifyTag(name)
+
+    const [existing] = await db
+        .select()
+        .from(tags)
+        .where(and(eq(tags.userId, userId), eq(tags.slug, slug)))
+        .limit(1)
+    if (existing) {
+        return c.json(existing)
+    }
+
+    const [created] = await db
+        .insert(tags)
+        .values({ id: `tag_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`, userId, name, slug })
+        .returning()
+
+    return c.json(created, 201)
+})
+
+// PATCH /api/tags/:id - Rename a tag
+app.patch('/api/tags/:id', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const body = await c.req.json<{ name?: unknown }>()
+
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (!name) {
+        return c.json({ error: 'name is required' }, 400)
+    }
+    const slug = slugifyTag(name)
+
+    const [conflict] = await db
+        .select()
+        .from(tags)
+        .where(and(eq(tags.userId, userId), eq(tags.slug, slug)))
+        .limit(1)
+    if (conflict && conflict.id !== id) {
+        return c.json({ error: 'A tag with that name already exists' }, 409)
+    }
+
+    const [updated] = await db
+        .update(tags)
+        .set({ name, slug })
+        .where(and(eq(tags.id, id), eq(tags.userId, userId)))
+        .returning()
+
+    if (!updated) {
+        return c.json({ error: 'Tag not found' }, 404)
+    }
+    return c.json(updated)
+})
+
+// DELETE /api/tags/:id - Delete a tag (cascades file_tags rows)
+app.delete('/api/tags/:id', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+
+    const [deleted] = await db
+        .delete(tags)
+        .where(and(eq(tags.id, id), eq(tags.userId, userId)))
+        .returning()
+
+    if (!deleted) {
+        return c.json({ error: 'Tag not found' }, 404)
+    }
+    return c.json({ success: true })
+})
+
+// GET /api/files/:id/tags - List tags assigned to a file
+app.get('/api/files/:id/tags', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+
+    const [file] = await db
+        .select({ id: mediaFiles.id })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId)))
+        .limit(1)
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    const rows = await db
+        .select({ id: tags.id, name: tags.name, color: tags.color })
+        .from(fileTags)
+        .innerJoin(tags, eq(fileTags.tagId, tags.id))
+        .where(eq(fileTags.fileId, id))
+        .orderBy(asc(tags.name))
+
+    return c.json(rows)
+})
+
+// PUT /api/files/:id/tags - Replace the full set of tags assigned to a file
+app.put('/api/files/:id/tags', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const body = await c.req.json<{ tagIds?: unknown }>()
+
+    if (!Array.isArray(body.tagIds)) {
+        return c.json({ error: 'tagIds must be an array of tag ids' }, 400)
+    }
+    const requestedIds = [...new Set(body.tagIds.filter((v): v is string => typeof v === 'string'))]
+
+    const [file] = await db
+        .select({ id: mediaFiles.id })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId)))
+        .limit(1)
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    // Only assign tags that belong to this user.
+    const ownedTags = requestedIds.length
+        ? await db.select({ id: tags.id }).from(tags).where(and(eq(tags.userId, userId), inArray(tags.id, requestedIds)))
+        : []
+    const ownedIds = ownedTags.map((t) => t.id)
+
+    db.transaction((tx) => {
+        tx.delete(fileTags).where(eq(fileTags.fileId, id)).run()
+        for (const tagId of ownedIds) {
+            tx.insert(fileTags).values({ fileId: id, tagId }).run()
+        }
+    })
+
+    const rows = await db
+        .select({ id: tags.id, name: tags.name, color: tags.color })
+        .from(fileTags)
+        .innerJoin(tags, eq(fileTags.tagId, tags.id))
+        .where(eq(fileTags.fileId, id))
+        .orderBy(asc(tags.name))
+
+    return c.json(rows)
 })
 
 // GET /api/stream/:id - Stream an indexed file for browser previews

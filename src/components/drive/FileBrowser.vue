@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useSlots, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
 import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
 import CategoryPickerModal from '@/components/common/CategoryPickerModal.vue'
+import TagPickerModal from '@/components/common/TagPickerModal.vue'
+import TagFilterDropdown from '@/components/common/TagFilterDropdown.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import type { MediaFile } from '@/types/media'
 import {
@@ -47,6 +50,8 @@ const isLoading = ref(true)
 const hasLoadedOnce = ref(false)
 const searchQuery = ref('')
 const selectedFilter = ref<string>('all')
+const selectedTagIds = ref<Set<string>>(new Set())
+const tagMatchMode = ref<'all' | 'any'>('all')
 const viewMode = ref<'grid' | 'list'>('list')
 const sortKey = ref<SortKey>('modified')
 const sortDirection = ref<'asc' | 'desc'>('desc')
@@ -90,9 +95,16 @@ const scopeLabel = computed(() =>
 
 /** File currently being re-categorized, or null when the modal is closed. */
 const editingFile = ref<MediaFile | null>(null)
+/** File currently being re-tagged, or null when the modal is closed. */
+const editingTagsFile = ref<MediaFile | null>(null)
 
 async function handleCategoriesSaved() {
     editingFile.value = null
+    await fetchFiles()
+}
+
+async function handleTagsSaved() {
+    editingTagsFile.value = null
     await fetchFiles()
 }
 
@@ -117,6 +129,10 @@ async function fetchFiles() {
             params.append('category', selectedFilter.value)
         }
         if (searchQuery.value.trim()) params.append('search', searchQuery.value.trim())
+        if (selectedTagIds.value.size) {
+            params.append('tags', [...selectedTagIds.value].join(','))
+            params.append('tagMode', tagMatchMode.value)
+        }
         params.append('sort', sortKey.value)
         params.append('dir', sortDirection.value)
         params.append('limit', '1000')
@@ -196,8 +212,17 @@ watch(
 )
 
 watch(selectedFilter, fetchFiles)
+watch(selectedTagIds, fetchFiles, { deep: true })
+watch(tagMatchMode, () => {
+    if (selectedTagIds.value.size) fetchFiles()
+})
 
 onMounted(() => {
+    // Deep-link support: /files?tags=tag_id from the tag manager's "view files" action.
+    const routeTags = useRoute().query.tags
+    if (typeof routeTags === 'string') {
+        selectedTagIds.value = new Set(routeTags.split(',').filter(Boolean))
+    }
     fetchStats()
     fetchFiles()
 })
@@ -229,18 +254,21 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <div
-                    class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1 self-end sm:self-auto">
-                    <button @click="viewMode = 'grid'" class="p-2 rounded-lg transition-colors cursor-pointer"
-                        :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
-                        title="Grid View">
-                        <Grid class="h-4 w-4" />
-                    </button>
-                    <button @click="viewMode = 'list'" class="p-2 rounded-lg transition-colors cursor-pointer"
-                        :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
-                        title="List View">
-                        <ListIcon class="h-4 w-4" />
-                    </button>
+                <div class="flex items-center gap-2 self-end sm:self-auto">
+                    <TagFilterDropdown v-model:selected-ids="selectedTagIds" v-model:match-mode="tagMatchMode" />
+
+                    <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
+                        <button @click="viewMode = 'grid'" class="p-2 rounded-lg transition-colors cursor-pointer"
+                            :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+                            title="Grid View">
+                            <Grid class="h-4 w-4" />
+                        </button>
+                        <button @click="viewMode = 'list'" class="p-2 rounded-lg transition-colors cursor-pointer"
+                            :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+                            title="List View">
+                            <ListIcon class="h-4 w-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -266,7 +294,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -387,6 +415,15 @@ onMounted(() => {
                                 {{ file.relativePath }}
                             </span>
                         </div>
+                        <div v-if="file.tags?.length" class="hidden shrink-0 items-center gap-1 md:flex">
+                            <span v-for="tag in file.tags.slice(0, 3)" :key="tag.id"
+                                class="rounded-full bg-gemini-blue/10 px-2 py-0.5 text-[11px] font-medium text-gemini-blue">
+                                {{ tag.name }}
+                            </span>
+                            <span v-if="file.tags.length > 3" class="text-[11px] text-gemini-subtext">
+                                +{{ file.tags.length - 3 }}
+                            </span>
+                        </div>
                     </div>
 
                     <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
@@ -399,7 +436,8 @@ onMounted(() => {
                             :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
                             <Eye class="h-4 w-4" />
                         </button>
-                        <FileActionsMenu :file="file" @edit-categories="editingFile = file" />
+                        <FileActionsMenu :file="file" @edit-categories="editingFile = file"
+                            @edit-tags="editingTagsFile = file" />
                     </div>
                 </div>
             </div>
@@ -413,5 +451,8 @@ onMounted(() => {
 
         <CategoryPickerModal v-if="editingFile" :file="editingFile" @close="editingFile = null"
             @saved="handleCategoriesSaved" />
+
+        <TagPickerModal v-if="editingTagsFile" :file="editingTagsFile" @close="editingTagsFile = null"
+            @saved="handleTagsSaved" />
     </div>
 </template>

@@ -16,6 +16,7 @@ import {
     Settings,
     SlidersHorizontal,
     Sparkles,
+    Tag,
     User,
     Shield
 } from 'lucide-vue-next'
@@ -146,6 +147,18 @@ const categories = [
                 ]">
                 <component :is="cat.icon" class="h-4 w-4 shrink-0" />
                 <span>{{ cat.name }}</span>
+            </RouterLink>
+
+            <hr class="my-1 border-gemini-border" />
+
+            <RouterLink to="/tags"
+                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="[
+                    route.path.startsWith('/tags')
+                        ? 'bg-gemini-blue/10 text-gemini-blue font-semibold'
+                        : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'
+                ]">
+                <Tag class="h-4 w-4 shrink-0" />
+                <span>Manage Tags</span>
             </RouterLink>
         </nav>
     </aside>

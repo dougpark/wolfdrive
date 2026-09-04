@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Download, ExternalLink, MessageSquareText, MoreVertical, Tags } from 'lucide-vue-next'
+import { Download, ExternalLink, MessageSquareText, MoreVertical, Tag as TagIcon, Tags } from 'lucide-vue-next'
 import { useAiChatPanel } from '@/composables/useAiChatPanel'
 import type { MediaFile } from '@/types/media'
 
@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
     (e: 'edit-categories'): void
+    (e: 'edit-tags'): void
 }>()
 
 const isOpen = ref(false)
@@ -62,6 +63,11 @@ function editCategories() {
     closeMenu()
 }
 
+function editTags() {
+    emit('edit-tags')
+    closeMenu()
+}
+
 onMounted(() => {
     document.addEventListener('click', handleDocumentClick)
     document.addEventListener('keydown', handleKeydown)
@@ -104,6 +110,12 @@ onBeforeUnmount(() => {
                 role="menuitem" @click="editCategories">
                 <Tags class="h-4 w-4 text-gemini-subtext" />
                 <span>Edit categories</span>
+            </button>
+            <button type="button"
+                class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                role="menuitem" @click="editTags">
+                <TagIcon class="h-4 w-4 text-gemini-subtext" />
+                <span>Manage tags</span>
             </button>
             <button type="button"
                 class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"

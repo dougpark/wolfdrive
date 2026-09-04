@@ -13,6 +13,7 @@ import SwatchesView from '../views/SwatchesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import AboutView from '../views/AboutView.vue'
 import PreviewView from '../views/PreviewView.vue'
+import TagsView from '../views/TagsView.vue'
 
 export const router = createRouter({
     history: createWebHistory(),
@@ -32,5 +33,6 @@ export const router = createRouter({
         { path: '/settings', component: SettingsView },
         { path: '/about', component: AboutView },
         { path: '/preview/:id', component: PreviewView },
+        { path: '/tags', component: TagsView },
     ],
 })

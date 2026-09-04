@@ -65,6 +65,30 @@ export const mediaFiles = sqliteTable('media_files', {
     index('media_files_user_category_size_idx').on(table.userId, table.mediaCategory, table.sizeBytes),
 ])
 
+// 3b. User-defined tags (free-form, unbounded — unlike the fixed customCategories set)
+export const tags = sqliteTable('tags', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(), // display casing, e.g. "Family Vacation"
+    slug: text('slug').notNull(), // normalized lowercase/trimmed for case-insensitive uniqueness & lookups
+    color: text('color'), // optional hex accent for chip rendering
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    uniqueIndex('tags_user_slug_idx').on(table.userId, table.slug),
+    index('tags_user_id_idx').on(table.userId),
+])
+
+// 3c. File <-> Tag join. Composite unique index also covers "tags for file" lookups;
+// the standalone tag_id index is what makes "files with tag X" filtering fast at 100k+ files.
+export const fileTags = sqliteTable('file_tags', {
+    fileId: text('file_id').notNull().references(() => mediaFiles.id, { onDelete: 'cascade' }),
+    tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    uniqueIndex('file_tags_file_tag_idx').on(table.fileId, table.tagId),
+    index('file_tags_tag_id_idx').on(table.tagId),
+])
+
 // app_settings table for storing application-wide settings, such as ignore patterns, scan intervals, etc.
 export const appSettings = sqliteTable('app_settings', {
     key: text('key').primaryKey(), // e.g., 'ignore_patterns'
