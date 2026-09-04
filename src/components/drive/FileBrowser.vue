@@ -8,6 +8,7 @@ import CategoryPickerModal from '@/components/common/CategoryPickerModal.vue'
 import TagPickerModal from '@/components/common/TagPickerModal.vue'
 import TagFilterDropdown from '@/components/common/TagFilterDropdown.vue'
 import BatchTagPanel from '@/components/common/BatchTagPanel.vue'
+import BatchCategoryPanel from '@/components/common/BatchCategoryPanel.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import type { MediaFile } from '@/types/media'
 import {
@@ -16,7 +17,7 @@ import {
     getCategoryIcon,
     type LibraryCategoryId,
 } from '@/config/libraryCategories'
-import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X, CheckSquare, Square, Tags as TagsIcon } from 'lucide-vue-next'
+import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X, CheckSquare, Square, Tags as TagsIcon, Boxes } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ library?: LibraryCategoryId }>(), {
     library: 'files',
@@ -101,6 +102,7 @@ const editingTagsFile = ref<MediaFile | null>(null)
 /** Ids of files checked for batch actions. */
 const selectedFileIds = ref<Set<string>>(new Set())
 const isBatchTagPanelOpen = ref(false)
+const isBatchCategoryPanelOpen = ref(false)
 const isAllSelected = computed(() =>
     files.value.length > 0 && selectedFileIds.value.size === files.value.length,
 )
@@ -131,6 +133,10 @@ async function handleTagsSaved() {
 }
 
 async function handleBatchTagsChanged() {
+    await fetchFiles()
+}
+
+async function handleBatchCategoriesChanged() {
     await fetchFiles()
 }
 
@@ -342,6 +348,12 @@ onMounted(() => {
                 <div class="flex items-center gap-2">
                     <button type="button"
                         class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
+                        @click="isBatchCategoryPanelOpen = true">
+                        <Boxes class="h-4 w-4" />
+                        Manage categories
+                    </button>
+                    <button type="button"
+                        class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
                         @click="isBatchTagPanelOpen = true">
                         <TagsIcon class="h-4 w-4" />
                         Manage tags
@@ -359,7 +371,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -530,5 +542,8 @@ onMounted(() => {
 
         <BatchTagPanel v-if="isBatchTagPanelOpen" :file-ids="[...selectedFileIds]" @close="isBatchTagPanelOpen = false"
             @changed="handleBatchTagsChanged" />
+
+        <BatchCategoryPanel v-if="isBatchCategoryPanelOpen" :file-ids="[...selectedFileIds]"
+            @close="isBatchCategoryPanelOpen = false" @changed="handleBatchCategoriesChanged" />
     </div>
 </template>

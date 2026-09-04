@@ -410,6 +410,87 @@ app.put('/api/files/:id/categories', async (c) => {
     return c.json(updated)
 })
 
+// GET /api/files/categories/usage?ids=a,b,c - Per-category usage counts across a batch of files
+app.get('/api/files/categories/usage', async (c) => {
+    const userId = c.get('userId')
+    const fileIds = (c.req.query('ids') ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+
+    if (fileIds.length === 0) {
+        return c.json({})
+    }
+
+    const rows = await db
+        .select({ customCategories: mediaFiles.customCategories })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.userId, userId), inArray(mediaFiles.id, fileIds)))
+
+    const counts: Record<string, number> = {}
+    for (const row of rows) {
+        for (const categoryId of row.customCategories ?? []) {
+            counts[categoryId] = (counts[categoryId] ?? 0) + 1
+        }
+    }
+
+    return c.json(counts)
+})
+
+// POST /api/files/categories/add - Add one library category to every file in a batch
+app.post('/api/files/categories/add', async (c) => {
+    const userId = c.get('userId')
+    const body = await c.req.json<{ fileIds?: unknown; categoryId?: unknown }>()
+
+    const categoryId = typeof body.categoryId === 'string' ? body.categoryId : ''
+    const fileIds = Array.isArray(body.fileIds) ? body.fileIds.filter((v): v is string => typeof v === 'string') : []
+    if (!categoryId || fileIds.length === 0 || !new Set<string>(SELECTABLE_LIBRARY_IDS).has(categoryId)) {
+        return c.json({ error: 'categoryId and fileIds are required' }, 400)
+    }
+
+    const rows = await db
+        .select({ id: mediaFiles.id, customCategories: mediaFiles.customCategories })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.userId, userId), inArray(mediaFiles.id, fileIds)))
+
+    db.transaction((tx) => {
+        for (const row of rows) {
+            if (row.customCategories?.includes(categoryId)) continue
+            const next = [...(row.customCategories ?? []), categoryId]
+            tx.update(mediaFiles).set({ customCategories: next }).where(eq(mediaFiles.id, row.id)).run()
+        }
+    })
+
+    return c.json({ success: true, fileCount: rows.length })
+})
+
+// POST /api/files/categories/remove - Remove one library category from every file in a batch
+app.post('/api/files/categories/remove', async (c) => {
+    const userId = c.get('userId')
+    const body = await c.req.json<{ fileIds?: unknown; categoryId?: unknown }>()
+
+    const categoryId = typeof body.categoryId === 'string' ? body.categoryId : ''
+    const fileIds = Array.isArray(body.fileIds) ? body.fileIds.filter((v): v is string => typeof v === 'string') : []
+    if (!categoryId || fileIds.length === 0) {
+        return c.json({ error: 'categoryId and fileIds are required' }, 400)
+    }
+
+    const rows = await db
+        .select({ id: mediaFiles.id, customCategories: mediaFiles.customCategories })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.userId, userId), inArray(mediaFiles.id, fileIds)))
+
+    db.transaction((tx) => {
+        for (const row of rows) {
+            if (!row.customCategories?.includes(categoryId)) continue
+            const next = row.customCategories.filter((c) => c !== categoryId)
+            tx.update(mediaFiles).set({ customCategories: next.length ? next : null }).where(eq(mediaFiles.id, row.id)).run()
+        }
+    })
+
+    return c.json({ success: true, fileCount: rows.length })
+})
+
 // GET /api/tags - List all tags for the user with usage counts (drives the tag manager + autocomplete)
 app.get('/api/tags', async (c) => {
     const userId = c.get('userId')
