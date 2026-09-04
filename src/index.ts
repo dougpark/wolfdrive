@@ -918,6 +918,39 @@ app.get('/api/stream/:id', async (c) => {
 // GET /api/stats - Fetch count breakdown across categories
 app.get('/api/stats', async (c) => {
     const userId = c.get('userId')
+    const requestedTagIds = (c.req.query('tags') ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    const tagMode = c.req.query('tagMode') === 'any' ? 'any' : 'all'
+    let conditions = [eq(mediaFiles.userId, userId)]
+
+    if (requestedTagIds.length > 0) {
+        const ownedTags = await db
+            .select({ id: tags.id })
+            .from(tags)
+            .where(and(eq(tags.userId, userId), inArray(tags.id, requestedTagIds)))
+        const ownedTagIds = ownedTags.map((tag) => tag.id)
+        if (ownedTagIds.length !== requestedTagIds.length) {
+            return c.json({ error: 'One or more tags were not found' }, 404)
+        }
+
+        if (tagMode === 'any') {
+            conditions.push(sql`EXISTS (
+                SELECT 1 FROM ${fileTags}
+                WHERE ${fileTags.fileId} = ${mediaFiles.id}
+                  AND ${fileTags.tagId} IN ${ownedTagIds}
+            )`)
+        } else {
+            for (const tagId of ownedTagIds) {
+                conditions.push(sql`EXISTS (
+                    SELECT 1 FROM ${fileTags}
+                    WHERE ${fileTags.fileId} = ${mediaFiles.id}
+                      AND ${fileTags.tagId} = ${tagId}
+                )`)
+            }
+        }
+    }
 
     const stats = await db
         .select({
@@ -925,7 +958,7 @@ app.get('/api/stats', async (c) => {
             count: sql<number>`count(*)`,
         })
         .from(mediaFiles)
-        .where(eq(mediaFiles.userId, userId))
+        .where(and(...conditions))
         .groupBy(mediaFiles.mediaCategory)
 
     // Returns: { image: 14200, video: 1200, audio: 4800, pdf: 312, ... }

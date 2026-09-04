@@ -143,7 +143,13 @@ async function handleBatchCategoriesChanged() {
 
 async function fetchStats() {
     try {
-        const res = await fetch('/api/stats')
+        const params = new URLSearchParams()
+        if (props.scopeTagIds.length) {
+            params.set('tags', props.scopeTagIds.join(','))
+            params.set('tagMode', 'all')
+        }
+        const query = params.toString()
+        const res = await fetch(`/api/stats${query ? `?${query}` : ''}`)
         if (res.ok) categoryCounts.value = await res.json()
     } catch (err) {
         console.error('Failed to load category stats:', err)
@@ -248,7 +254,10 @@ watch(
     },
 )
 
-watch(() => props.scopeTagIds, fetchFiles, { deep: true })
+watch(() => props.scopeTagIds, () => {
+    fetchStats()
+    fetchFiles()
+}, { deep: true })
 
 watch(selectedFilter, fetchFiles)
 watch(selectedTagIds, fetchFiles, { deep: true })
