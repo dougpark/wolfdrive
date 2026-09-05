@@ -325,10 +325,10 @@ onDeactivated(() => {
 
 // --- List-view row virtualization: up to 1000 rows would otherwise all mount at once ---
 
-/** Wraps the sticky top bar/filters and the batch bar + subheader (two separate elements now,
- * since the sticky header's own parent must span the full scroll range to stay pinned); both
- * are observed so layout shifts (batch bar appearing, wrapped filter chips, etc.) keep the
- * virtualizer's scroll math correct. */
+/** Wraps the sticky header (top bar, filters, batch action bar) and the subheader below it
+ * (two separate elements now, since the sticky header's own parent must span the full scroll
+ * range to stay pinned); both are observed so layout shifts (batch bar appearing, wrapped
+ * filter chips, etc.) keep the virtualizer's scroll math correct. */
 const aboveListEl = ref<HTMLElement | null>(null)
 const belowStickyEl = ref<HTMLElement | null>(null)
 const listBodyEl = ref<HTMLElement | null>(null)
@@ -464,43 +464,43 @@ onBeforeUnmount(() => {
                             </span>
                         </button>
                     </div>
+
+                    <!-- Batch Action Bar -->
+                    <div v-if="selectedFileIds.size > 0"
+                        class="mb-5 flex items-center justify-between gap-4 rounded-xl border border-gemini-blue/30 bg-gemini-blue/10 px-4 py-2.5">
+                        <span class="text-sm font-medium text-gemini-blue">
+                            {{ selectedFileIds.size }} selected
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
+                                @click="isBatchCategoryPanelOpen = true">
+                                <Boxes class="h-4 w-4" />
+                                Manage categories
+                            </button>
+                            <button type="button"
+                                class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
+                                @click="isBatchTagPanelOpen = true">
+                                <TagsIcon class="h-4 w-4" />
+                                Manage tags
+                            </button>
+                            <button type="button"
+                                class="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gemini-subtext transition-colors hover:text-gemini-text"
+                                title="Clear selection" aria-label="Clear selection" @click="deselectAll">
+                                <X class="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Batch Action Bar -->
+            <!-- Contextual Count Subheader -->
             <div ref="belowStickyEl">
-                <div v-if="selectedFileIds.size > 0"
-                    class="mb-5 flex items-center justify-between gap-4 rounded-xl border border-gemini-blue/30 bg-gemini-blue/10 px-4 py-2.5">
-                    <span class="text-sm font-medium text-gemini-blue">
-                        {{ selectedFileIds.size }} selected
-                    </span>
-                    <div class="flex items-center gap-2">
-                        <button type="button"
-                            class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
-                            @click="isBatchCategoryPanelOpen = true">
-                            <Boxes class="h-4 w-4" />
-                            Manage categories
-                        </button>
-                        <button type="button"
-                            class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
-                            @click="isBatchTagPanelOpen = true">
-                            <TagsIcon class="h-4 w-4" />
-                            Manage tags
-                        </button>
-                        <button type="button"
-                            class="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gemini-subtext transition-colors hover:text-gemini-text"
-                            title="Clear selection" aria-label="Clear selection" @click="deselectAll">
-                            <X class="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Contextual Count Subheader -->
                 <div class="flex items-center justify-between text-xs text-gemini-subtext mb-5 px-1 font-medium">
                     <div>
                         <span v-if="searchQuery.trim()">
                             Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
-                            }}</strong> results
+                                }}</strong> results
                             <span v-if="hasScope"> in {{ scopeLabel }}</span>
                             for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                         </span>
@@ -510,7 +510,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span v-else>
                             <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString()
-                            }}</strong>
+                                }}</strong>
                             total
                             indexed files
                         </span>
