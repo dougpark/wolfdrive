@@ -372,6 +372,13 @@ app.get('/api/files', async (c) => {
     const sortColumn = FILE_SORT_COLUMNS[c.req.query('sort') ?? ''] ?? mediaFiles.mtimeMs
     const sortDirection = c.req.query('dir') === 'asc' ? 'asc' : 'desc'
 
+    // Matching row count ignoring the `limit` cap, so the UI can show an accurate
+    // total even when the result list itself is capped (e.g. large libraries).
+    const [totalRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(mediaFiles)
+        .where(and(...conditions))
+
     const files = await db
         .select()
         .from(mediaFiles)
@@ -382,6 +389,7 @@ app.get('/api/files', async (c) => {
     const tagsByFile = await attachTags(files.map((f) => f.id))
     const filesWithTags = files.map((f) => ({ ...f, tags: tagsByFile.get(f.id) ?? [] }))
 
+    c.header('X-Total-Count', String(totalRow?.count ?? filesWithTags.length))
     return c.json(filesWithTags)
 })
 

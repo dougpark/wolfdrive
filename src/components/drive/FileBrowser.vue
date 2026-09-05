@@ -49,6 +49,8 @@ const showHeader = computed(() => !showFilters.value)
 
 const files = ref<MediaFile[]>([])
 const categoryCounts = ref<Record<string, number>>({})
+/** Total rows matching the current query, ignoring the 1000-row cap on `files`. */
+const totalMatchCount = ref(0)
 const isLoading = ref(true)
 const hasLoadedOnce = ref(false)
 const searchQuery = ref('')
@@ -83,11 +85,12 @@ const totalFileCount = computed(() =>
 )
 
 /**
- * Header count for the current scope. Library views use the fetched result size
- * because user-assigned tags change membership and /api/stats is mime-only.
+ * Header count for the current scope. Library views use the backend's total match
+ * count (not the capped result length) since /api/stats is mime-only and can't
+ * account for user-assigned tag membership.
  */
 const scopedCount = computed(() => {
-    if (!showFilters.value) return files.value.length
+    if (!showFilters.value) return totalMatchCount.value
     return selectedFilter.value === 'all'
         ? totalFileCount.value
         : (categoryCounts.value[selectedFilter.value] || 0)
@@ -180,6 +183,7 @@ async function fetchFiles() {
 
         const res = await fetch(`/api/files?${params.toString()}`)
         files.value = await res.json()
+        totalMatchCount.value = Number(res.headers.get('X-Total-Count') ?? files.value.length)
         emit('files-loaded', files.value)
         // Drop selections for files no longer in the result set (filter/search changed).
         const visibleIds = new Set(files.value.map((f) => f.id))
@@ -418,8 +422,8 @@ onMounted(() => {
             <div class="flex items-center justify-between text-xs text-gemini-subtext mb-5 px-1 font-medium">
                 <div>
                     <span v-if="searchQuery.trim()">
-                        Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
+                        Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
+                            }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
