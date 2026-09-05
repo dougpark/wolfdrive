@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onDeactivated, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useSlots, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useVirtualizer, type VirtualItem } from '@tanstack/vue-virtual'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
 import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
@@ -293,28 +294,84 @@ async function handleRate(file: MediaFile, rating: number) {
 }
 
 // The scrollable ancestor is AppLayout's <main>, not window; found lazily since
-// this component doesn't own that element. Saved/restored across keep-alive toggles.
+// this component doesn't own that element. Saved/restored across keep-alive toggles,
+// and reused below as the row virtualizer's scroll element.
 const rootEl = ref<HTMLElement | null>(null)
-let scrollParent: HTMLElement | null = null
+const scrollParentRef = ref<HTMLElement | null>(null)
 let savedScrollTop = 0
 
 function findScrollParent(el: HTMLElement | null): HTMLElement | null {
     let node = el?.parentElement ?? null
     while (node) {
         const overflowY = getComputedStyle(node).overflowY
-        if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) return node
+        // Identify the scrollable ancestor by its CSS alone — not whether it currently
+        // overflows, since on first load (before the file list renders) it often doesn't
+        // yet, which would otherwise leave the virtualizer permanently without a scroll element.
+        if (overflowY === 'auto' || overflowY === 'scroll') return node
         node = node.parentElement
     }
     return null
 }
 
 onActivated(() => {
-    if (!scrollParent) scrollParent = findScrollParent(rootEl.value)
-    if (scrollParent) scrollParent.scrollTop = savedScrollTop
+    if (!scrollParentRef.value) scrollParentRef.value = findScrollParent(rootEl.value)
+    if (scrollParentRef.value) scrollParentRef.value.scrollTop = savedScrollTop
+    nextTick(updateScrollMargin)
 })
 
 onDeactivated(() => {
-    if (scrollParent) savedScrollTop = scrollParent.scrollTop
+    if (scrollParentRef.value) savedScrollTop = scrollParentRef.value.scrollTop
+})
+
+// --- List-view row virtualization: up to 1000 rows would otherwise all mount at once ---
+
+/** Wraps everything rendered above the row list; observed so layout shifts (batch bar
+ * appearing, wrapped filter chips, etc.) keep the virtualizer's scroll math correct. */
+const aboveListEl = ref<HTMLElement | null>(null)
+const listBodyEl = ref<HTMLElement | null>(null)
+const scrollMarginPx = ref(0)
+let resizeObserver: ResizeObserver | null = null
+
+function updateScrollMargin() {
+    if (!listBodyEl.value || !scrollParentRef.value) return
+    const listRect = listBodyEl.value.getBoundingClientRect()
+    const scrollRect = scrollParentRef.value.getBoundingClientRect()
+    scrollMarginPx.value = listRect.top - scrollRect.top + scrollParentRef.value.scrollTop
+}
+
+const rowVirtualizer = useVirtualizer(computed(() => ({
+    count: files.value.length,
+    getScrollElement: () => scrollParentRef.value,
+    estimateSize: () => 57,
+    overscan: 10,
+    scrollMargin: scrollMarginPx.value,
+    getItemKey: (index: number) => files.value[index]?.id ?? index,
+})))
+
+const totalRowsSize = computed(() => rowVirtualizer.value.getTotalSize())
+
+const virtualRows = computed(() =>
+    rowVirtualizer.value.getVirtualItems()
+        .map((item) => ({ item, file: files.value[item.index] }))
+        .filter((row): row is { item: VirtualItem; file: MediaFile } => !!row.file),
+)
+
+function measureRow(el: Element | null) {
+    rowVirtualizer.value.measureElement(el)
+}
+
+watch(viewMode, async (mode) => {
+    if (mode === 'list') {
+        await nextTick()
+        updateScrollMargin()
+    }
+})
+
+watch(showSkeleton, async (isSkeleton) => {
+    if (!isSkeleton) {
+        await nextTick()
+        updateScrollMargin()
+    }
 })
 
 onMounted(() => {
@@ -325,6 +382,13 @@ onMounted(() => {
     }
     fetchStats()
     fetchFiles()
+
+    resizeObserver = new ResizeObserver(updateScrollMargin)
+    if (aboveListEl.value) resizeObserver.observe(aboveListEl.value)
+})
+
+onBeforeUnmount(() => {
+    resizeObserver?.disconnect()
 })
 </script>
 
@@ -332,128 +396,131 @@ onMounted(() => {
     <div ref="rootEl" class="bg-gemini-bg text-gemini-text transition-colors duration-200">
         <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
-            <!-- Top Bar: Title, Search & View Toggles -->
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
+            <div ref="aboveListEl">
+                <!-- Top Bar: Title, Search & View Toggles -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
 
-                <div class="flex flex-1 items-center gap-4 min-w-0">
-                    <h1 v-if="showHeader" class="shrink-0 text-xl font-semibold tracking-tight text-gemini-text">
-                        {{ library.label }}
-                    </h1>
+                    <div class="flex flex-1 items-center gap-4 min-w-0">
+                        <h1 v-if="showHeader" class="shrink-0 text-xl font-semibold tracking-tight text-gemini-text">
+                            {{ library.label }}
+                        </h1>
 
-                    <div class="relative flex-1 max-w-lg">
-                        <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
-                        <input v-model="searchQuery" type="text"
-                            :placeholder="`Search ${library.label.toLowerCase()}...`"
-                            class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors"
-                            @keydown.esc="clearSearch" />
-                        <button v-if="searchQuery" type="button" aria-label="Clear search" title="Clear search"
-                            class="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg p-1 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
-                            @click="clearSearch">
+                        <div class="relative flex-1 max-w-lg">
+                            <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
+                            <input v-model="searchQuery" type="text"
+                                :placeholder="`Search ${library.label.toLowerCase()}...`"
+                                class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors"
+                                @keydown.esc="clearSearch" />
+                            <button v-if="searchQuery" type="button" aria-label="Clear search" title="Clear search"
+                                class="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg p-1 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
+                                @click="clearSearch">
+                                <X class="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 self-end sm:self-auto">
+                        <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
+                            <button type="button"
+                                class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="files.length === 0 || isAllSelected" title="Select all"
+                                aria-label="Select all" @click="selectAll">
+                                <CheckSquare class="h-4 w-4" />
+                            </button>
+                            <button type="button"
+                                class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="selectedFileIds.size === 0" title="Deselect all" aria-label="Deselect all"
+                                @click="deselectAll">
+                                <Square class="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <TagFilterDropdown v-model:selected-ids="selectedTagIds" v-model:match-mode="tagMatchMode" />
+
+                        <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
+                            <button @click="viewMode = 'grid'" class="p-2 rounded-lg transition-colors cursor-pointer"
+                                :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+                                title="Grid View">
+                                <Grid class="h-4 w-4" />
+                            </button>
+                            <button @click="viewMode = 'list'" class="p-2 rounded-lg transition-colors cursor-pointer"
+                                :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+                                title="List View">
+                                <ListIcon class="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick media-type filters for the unfiltered Files view -->
+                <div v-if="showFilters" class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+                    <button v-for="filter in MEDIA_FILTERS" :key="filter.id" type="button"
+                        class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all"
+                        :class="selectedFilter === filter.id
+                            ? 'border border-gemini-blue/30 bg-gemini-surface text-gemini-blue shadow-xs'
+                            : 'border border-gemini-border bg-gemini-card text-gemini-subtext hover:border-gemini-subtext/40 hover:text-gemini-text'"
+                        @click="selectedFilter = filter.id">
+                        <component :is="filter.icon" class="h-4 w-4" />
+                        <span>{{ filter.label }}</span>
+                        <span class="rounded-md px-1.5 py-0.5 font-mono text-xs transition-colors"
+                            :class="selectedFilter === filter.id ? 'bg-gemini-blue/15 font-semibold text-gemini-blue' : 'bg-gemini-surface/80 text-gemini-subtext/70'">
+                            {{ formatCount(getFilterCount(filter.id)) }}
+                        </span>
+                    </button>
+                </div>
+
+                <!-- Batch Action Bar -->
+                <div v-if="selectedFileIds.size > 0"
+                    class="mb-5 flex items-center justify-between gap-4 rounded-xl border border-gemini-blue/30 bg-gemini-blue/10 px-4 py-2.5">
+                    <span class="text-sm font-medium text-gemini-blue">
+                        {{ selectedFileIds.size }} selected
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                            class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
+                            @click="isBatchCategoryPanelOpen = true">
+                            <Boxes class="h-4 w-4" />
+                            Manage categories
+                        </button>
+                        <button type="button"
+                            class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
+                            @click="isBatchTagPanelOpen = true">
+                            <TagsIcon class="h-4 w-4" />
+                            Manage tags
+                        </button>
+                        <button type="button"
+                            class="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gemini-subtext transition-colors hover:text-gemini-text"
+                            title="Clear selection" aria-label="Clear selection" @click="deselectAll">
                             <X class="h-4 w-4" />
                         </button>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 self-end sm:self-auto">
-                    <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
-                        <button type="button"
-                            class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
-                            :disabled="files.length === 0 || isAllSelected" title="Select all" aria-label="Select all"
-                            @click="selectAll">
-                            <CheckSquare class="h-4 w-4" />
-                        </button>
-                        <button type="button"
-                            class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
-                            :disabled="selectedFileIds.size === 0" title="Deselect all" aria-label="Deselect all"
-                            @click="deselectAll">
-                            <Square class="h-4 w-4" />
-                        </button>
-                    </div>
-
-                    <TagFilterDropdown v-model:selected-ids="selectedTagIds" v-model:match-mode="tagMatchMode" />
-
-                    <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
-                        <button @click="viewMode = 'grid'" class="p-2 rounded-lg transition-colors cursor-pointer"
-                            :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
-                            title="Grid View">
-                            <Grid class="h-4 w-4" />
-                        </button>
-                        <button @click="viewMode = 'list'" class="p-2 rounded-lg transition-colors cursor-pointer"
-                            :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
-                            title="List View">
-                            <ListIcon class="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick media-type filters for the unfiltered Files view -->
-            <div v-if="showFilters" class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
-                <button v-for="filter in MEDIA_FILTERS" :key="filter.id" type="button"
-                    class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all"
-                    :class="selectedFilter === filter.id
-                        ? 'border border-gemini-blue/30 bg-gemini-surface text-gemini-blue shadow-xs'
-                        : 'border border-gemini-border bg-gemini-card text-gemini-subtext hover:border-gemini-subtext/40 hover:text-gemini-text'"
-                    @click="selectedFilter = filter.id">
-                    <component :is="filter.icon" class="h-4 w-4" />
-                    <span>{{ filter.label }}</span>
-                    <span class="rounded-md px-1.5 py-0.5 font-mono text-xs transition-colors"
-                        :class="selectedFilter === filter.id ? 'bg-gemini-blue/15 font-semibold text-gemini-blue' : 'bg-gemini-surface/80 text-gemini-subtext/70'">
-                        {{ formatCount(getFilterCount(filter.id)) }}
-                    </span>
-                </button>
-            </div>
-
-            <!-- Batch Action Bar -->
-            <div v-if="selectedFileIds.size > 0"
-                class="mb-5 flex items-center justify-between gap-4 rounded-xl border border-gemini-blue/30 bg-gemini-blue/10 px-4 py-2.5">
-                <span class="text-sm font-medium text-gemini-blue">
-                    {{ selectedFileIds.size }} selected
-                </span>
-                <div class="flex items-center gap-2">
-                    <button type="button"
-                        class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
-                        @click="isBatchCategoryPanelOpen = true">
-                        <Boxes class="h-4 w-4" />
-                        Manage categories
-                    </button>
-                    <button type="button"
-                        class="flex cursor-pointer items-center gap-2 rounded-lg bg-gemini-card px-3 py-1.5 text-sm font-medium text-gemini-blue border border-gemini-blue/30 transition-colors hover:bg-gemini-surface"
-                        @click="isBatchTagPanelOpen = true">
-                        <TagsIcon class="h-4 w-4" />
-                        Manage tags
-                    </button>
-                    <button type="button"
-                        class="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gemini-subtext transition-colors hover:text-gemini-text"
-                        title="Clear selection" aria-label="Clear selection" @click="deselectAll">
-                        <X class="h-4 w-4" />
-                    </button>
-                </div>
-            </div>
-
-            <!-- Contextual Count Subheader -->
-            <div class="flex items-center justify-between text-xs text-gemini-subtext mb-5 px-1 font-medium">
-                <div>
-                    <span v-if="searchQuery.trim()">
-                        Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
+                <!-- Contextual Count Subheader -->
+                <div class="flex items-center justify-between text-xs text-gemini-subtext mb-5 px-1 font-medium">
+                    <div>
+                        <span v-if="searchQuery.trim()">
+                            Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
                             }}</strong> results
-                        <span v-if="hasScope"> in {{ scopeLabel }}</span>
-                        for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
-                    </span>
-                    <span v-else-if="hasScope">
-                        <strong class="text-gemini-text font-semibold">{{ scopedCount.toLocaleString() }}</strong>
-                        {{ scopeLabel }} files
-                    </span>
-                    <span v-else>
-                        <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString() }}</strong>
-                        total
-                        indexed files
+                            <span v-if="hasScope"> in {{ scopeLabel }}</span>
+                            for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
+                        </span>
+                        <span v-else-if="hasScope">
+                            <strong class="text-gemini-text font-semibold">{{ scopedCount.toLocaleString() }}</strong>
+                            {{ scopeLabel }} files
+                        </span>
+                        <span v-else>
+                            <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString()
+                            }}</strong>
+                            total
+                            indexed files
+                        </span>
+                    </div>
+
+                    <span v-if="files.length >= 1000" class="text-amber-500 font-mono text-[11px]">
+                        (Capped at 1000 items)
                     </span>
                 </div>
-
-                <span v-if="files.length >= 1000" class="text-amber-500 font-mono text-[11px]">
-                    (Capped at 1000 items)
-                </span>
             </div>
 
             <!-- Loading Skeleton: only before the first result set, so refetches don't flash a layout swap -->
@@ -510,12 +577,12 @@ onMounted(() => {
 
             <!-- LIST VIEW -->
             <div v-else
-                class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden divide-y divide-gemini-border transition-opacity duration-150"
+                class="bg-gemini-card border border-gemini-border rounded-2xl overflow-hidden transition-opacity duration-150"
                 :class="{ 'opacity-50': isLoading }">
 
                 <!-- Column Headers -->
                 <div
-                    class="flex items-center justify-between bg-gemini-surface/60 px-5 py-2 text-xs font-medium text-gemini-subtext">
+                    class="flex items-center justify-between border-b border-gemini-border bg-gemini-surface/60 px-5 py-2 text-xs font-medium text-gemini-subtext">
                     <div class="flex min-w-0 flex-1 items-center gap-3.5 pr-4">
                         <input type="checkbox" :checked="isAllSelected"
                             class="h-4 w-4 shrink-0 cursor-pointer accent-gemini-blue" aria-label="Select all"
@@ -549,49 +616,54 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <div v-for="file in files" :key="file.id"
-                    class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
-                    @dblclick="handlePreview(file, files)">
-                    <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-4">
-                        <input type="checkbox" :checked="selectedFileIds.has(file.id)"
-                            class="h-4 w-4 shrink-0 cursor-pointer accent-gemini-blue"
-                            :aria-label="`Select ${file.filename}`" @click.stop="toggleFileSelection(file.id)" />
-                        <component :is="getCategoryIcon(file.mediaCategory)"
-                            class="h-5 w-5 text-gemini-blue shrink-0" />
-                        <div class="min-w-0 flex-1">
-                            <span class="block text-sm font-medium text-gemini-text truncate">
-                                {{ file.filename }}
-                            </span>
-                            <span class="block text-xs font-mono text-gemini-subtext truncate">
-                                {{ file.relativePath }}
-                            </span>
+                <div ref="listBodyEl" :style="{ height: `${totalRowsSize}px`, position: 'relative' }">
+                    <div v-for="row in virtualRows" :key="row.item.key" :ref="measureRow" :data-index="row.item.index"
+                        class="absolute top-0 left-0 flex w-full items-center justify-between border-b border-gemini-border px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
+                        :style="{ transform: `translateY(${row.item.start - scrollMarginPx}px)` }"
+                        @dblclick="handlePreview(row.file, files)">
+                        <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-4">
+                            <input type="checkbox" :checked="selectedFileIds.has(row.file.id)"
+                                class="h-4 w-4 shrink-0 cursor-pointer accent-gemini-blue"
+                                :aria-label="`Select ${row.file.filename}`"
+                                @click.stop="toggleFileSelection(row.file.id)" />
+                            <component :is="getCategoryIcon(row.file.mediaCategory)"
+                                class="h-5 w-5 text-gemini-blue shrink-0" />
+                            <div class="min-w-0 flex-1">
+                                <span class="block text-sm font-medium text-gemini-text truncate">
+                                    {{ row.file.filename }}
+                                </span>
+                                <span class="block text-xs font-mono text-gemini-subtext truncate">
+                                    {{ row.file.relativePath }}
+                                </span>
+                            </div>
+                            <div v-if="visibleTags(row.file).length" class="hidden shrink-0 items-center gap-1 md:flex">
+                                <span v-for="tag in visibleTags(row.file).slice(0, 3)" :key="tag.id"
+                                    class="rounded-full bg-gemini-blue/10 px-2 py-0.5 text-[11px] font-medium text-gemini-blue">
+                                    {{ tag.name }}
+                                </span>
+                                <span v-if="visibleTags(row.file).length > 3" class="text-[11px] text-gemini-subtext">
+                                    +{{ visibleTags(row.file).length - 3 }}
+                                </span>
+                            </div>
                         </div>
-                        <div v-if="visibleTags(file).length" class="hidden shrink-0 items-center gap-1 md:flex">
-                            <span v-for="tag in visibleTags(file).slice(0, 3)" :key="tag.id"
-                                class="rounded-full bg-gemini-blue/10 px-2 py-0.5 text-[11px] font-medium text-gemini-blue">
-                                {{ tag.name }}
-                            </span>
-                            <span v-if="visibleTags(file).length > 3" class="text-[11px] text-gemini-subtext">
-                                +{{ visibleTags(file).length - 3 }}
-                            </span>
-                        </div>
-                    </div>
 
-                    <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
-                        <div class="w-24 flex justify-end" @click.stop>
-                            <StarRating :rating="getRating(file)" interactive @rate="(v) => handleRate(file, v)" />
+                        <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
+                            <div class="w-24 flex justify-end" @click.stop>
+                                <StarRating :rating="getRating(row.file)" interactive
+                                    @rate="(v) => handleRate(row.file, v)" />
+                            </div>
+                            <slot v-if="hasExtraColumns" name="column-cell" :file="row.file"></slot>
+                            <span class="uppercase font-mono w-12 text-right">{{ row.file.extension }}</span>
+                            <span class="hidden sm:block w-24 text-right">{{ formatDate(row.file.mtimeMs) }}</span>
+                            <span class="w-20 text-right">{{ formatBytes(row.file.sizeBytes) }}</span>
+                            <button type="button"
+                                class="p-2 -m-2 rounded-lg text-gemini-subtext hover:bg-gemini-card hover:text-gemini-blue transition-colors cursor-pointer"
+                                :title="`Preview ${row.file.filename}`" @click.stop="handlePreview(row.file, files)">
+                                <Eye class="h-4 w-4" />
+                            </button>
+                            <FileActionsMenu :file="row.file" @edit-categories="editingFile = row.file"
+                                @edit-tags="editingTagsFile = row.file" />
                         </div>
-                        <slot v-if="hasExtraColumns" name="column-cell" :file="file"></slot>
-                        <span class="uppercase font-mono w-12 text-right">{{ file.extension }}</span>
-                        <span class="hidden sm:block w-24 text-right">{{ formatDate(file.mtimeMs) }}</span>
-                        <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>
-                        <button type="button"
-                            class="p-2 -m-2 rounded-lg text-gemini-subtext hover:bg-gemini-card hover:text-gemini-blue transition-colors cursor-pointer"
-                            :title="`Preview ${file.filename}`" @click.stop="handlePreview(file, files)">
-                            <Eye class="h-4 w-4" />
-                        </button>
-                        <FileActionsMenu :file="file" @edit-categories="editingFile = file"
-                            @edit-tags="editingTagsFile = file" />
                     </div>
                 </div>
             </div>
