@@ -20,7 +20,7 @@ import {
     getCategoryIcon,
     type LibraryCategoryId,
 } from '@/config/libraryCategories'
-import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X, CheckSquare, Square, Tags as TagsIcon, Boxes } from 'lucide-vue-next'
+import { Search, Grid, List as ListIcon, Filter, Eye, ArrowUp, ArrowDown, X, Tags as TagsIcon, Boxes } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ library?: LibraryCategoryId; scopeTagIds?: string[] }>(), {
     library: 'files',
@@ -420,21 +420,6 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="flex items-center gap-2 self-end sm:self-auto">
-                        <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
-                            <button type="button"
-                                class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
-                                :disabled="files.length === 0 || isAllSelected" title="Select all"
-                                aria-label="Select all" @click="selectAll">
-                                <CheckSquare class="h-4 w-4" />
-                            </button>
-                            <button type="button"
-                                class="p-2 rounded-lg transition-colors cursor-pointer text-gemini-subtext hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
-                                :disabled="selectedFileIds.size === 0" title="Deselect all" aria-label="Deselect all"
-                                @click="deselectAll">
-                                <Square class="h-4 w-4" />
-                            </button>
-                        </div>
-
                         <TagFilterDropdown v-model:selected-ids="selectedTagIds" v-model:match-mode="tagMatchMode" />
 
                         <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
@@ -501,7 +486,7 @@ onBeforeUnmount(() => {
                     <div>
                         <span v-if="searchQuery.trim()">
                             Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
-                            }}</strong> results
+                                }}</strong> results
                             <span v-if="hasScope"> in {{ scopeLabel }}</span>
                             for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                         </span>
@@ -511,7 +496,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span v-else>
                             <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString()
-                            }}</strong>
+                                }}</strong>
                             total
                             indexed files
                         </span>

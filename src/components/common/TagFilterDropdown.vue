@@ -65,6 +65,11 @@ onBeforeUnmount(() => {
                 class="rounded-md bg-gemini-blue/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-gemini-blue">
                 {{ selectedIds.size }}
             </span>
+            <button v-if="selectedIds.size" type="button" aria-label="Clear tag filter" title="Clear tag filter"
+                class="-mr-1 cursor-pointer rounded-md p-0.5 text-gemini-blue transition-colors hover:bg-gemini-blue/15"
+                @click.stop="clearAll">
+                <X class="h-3.5 w-3.5" />
+            </button>
             <ChevronDown class="h-3.5 w-3.5" />
         </button>
 
