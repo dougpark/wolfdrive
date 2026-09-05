@@ -17,6 +17,7 @@ frontend:
 # Build and deploy the production Docker container in the background
 prod-up:
 	docker compose up --build -d
+	date
 
 # View live production container logs
 prod-logs:
