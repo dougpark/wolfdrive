@@ -11,7 +11,7 @@ import BatchTagPanel from '@/components/common/BatchTagPanel.vue'
 import BatchCategoryPanel from '@/components/common/BatchCategoryPanel.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
 import StarRating from '@/components/common/StarRating.vue'
-import { getRating, setRating } from '@/composables/useFileRating'
+import { getRating, isRatingTag, setRating } from '@/composables/useFileRating'
 import type { MediaFile } from '@/types/media'
 import {
     LIBRARY_CATEGORIES,
@@ -223,6 +223,11 @@ function formatCount(count: number | undefined) {
     return count.toLocaleString()
 }
 
+/** Non-rating tags for the row chip list; rating tags are already shown as stars. */
+function visibleTags(file: MediaFile) {
+    return (file.tags ?? []).filter((tag) => !isRatingTag(tag.name))
+}
+
 function getFilterCount(filterId: string) {
     return filterId === 'all' ? totalFileCount.value : categoryCounts.value[filterId]
 }
@@ -431,7 +436,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
-                        }}</strong> results
+                            }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -561,13 +566,13 @@ onMounted(() => {
                                 {{ file.relativePath }}
                             </span>
                         </div>
-                        <div v-if="file.tags?.length" class="hidden shrink-0 items-center gap-1 md:flex">
-                            <span v-for="tag in file.tags.slice(0, 3)" :key="tag.id"
+                        <div v-if="visibleTags(file).length" class="hidden shrink-0 items-center gap-1 md:flex">
+                            <span v-for="tag in visibleTags(file).slice(0, 3)" :key="tag.id"
                                 class="rounded-full bg-gemini-blue/10 px-2 py-0.5 text-[11px] font-medium text-gemini-blue">
                                 {{ tag.name }}
                             </span>
-                            <span v-if="file.tags.length > 3" class="text-[11px] text-gemini-subtext">
-                                +{{ file.tags.length - 3 }}
+                            <span v-if="visibleTags(file).length > 3" class="text-[11px] text-gemini-subtext">
+                                +{{ visibleTags(file).length - 3 }}
                             </span>
                         </div>
                     </div>

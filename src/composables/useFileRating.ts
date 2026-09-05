@@ -2,6 +2,11 @@ import type { MediaFile, Tag } from '@/types/media'
 
 const RATING_TAG_PATTERN = /^([1-5])-star$/
 
+/** True for the mutually-exclusive "N-star" tags that back the star-rating feature. */
+export function isRatingTag(name: string): boolean {
+    return RATING_TAG_PATTERN.test(name)
+}
+
 /** Reads the current star rating (0-5) from a file's tags, if any. */
 export function getRating(file: MediaFile): number {
     for (const tag of file.tags ?? []) {
