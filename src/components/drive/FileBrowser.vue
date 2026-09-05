@@ -325,9 +325,12 @@ onDeactivated(() => {
 
 // --- List-view row virtualization: up to 1000 rows would otherwise all mount at once ---
 
-/** Wraps everything rendered above the row list; observed so layout shifts (batch bar
- * appearing, wrapped filter chips, etc.) keep the virtualizer's scroll math correct. */
+/** Wraps the sticky top bar/filters and the batch bar + subheader (two separate elements now,
+ * since the sticky header's own parent must span the full scroll range to stay pinned); both
+ * are observed so layout shifts (batch bar appearing, wrapped filter chips, etc.) keep the
+ * virtualizer's scroll math correct. */
 const aboveListEl = ref<HTMLElement | null>(null)
+const belowStickyEl = ref<HTMLElement | null>(null)
 const listBodyEl = ref<HTMLElement | null>(null)
 const scrollMarginPx = ref(0)
 let resizeObserver: ResizeObserver | null = null
@@ -385,6 +388,7 @@ onMounted(() => {
 
     resizeObserver = new ResizeObserver(updateScrollMargin)
     if (aboveListEl.value) resizeObserver.observe(aboveListEl.value)
+    if (belowStickyEl.value) resizeObserver.observe(belowStickyEl.value)
 })
 
 onBeforeUnmount(() => {
@@ -396,65 +400,75 @@ onBeforeUnmount(() => {
     <div ref="rootEl" class="bg-gemini-bg text-gemini-text transition-colors duration-200">
         <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
-            <div ref="aboveListEl">
-                <!-- Top Bar: Title, Search & View Toggles -->
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
+            <div class="sticky top-0 z-10 bg-gemini-bg pb-2">
+                <div ref="aboveListEl">
+                    <!-- Top Bar: Title, Search & View Toggles -->
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
 
-                    <div class="flex flex-1 items-center gap-4 min-w-0">
-                        <h1 v-if="showHeader" class="shrink-0 text-xl font-semibold tracking-tight text-gemini-text">
-                            {{ library.label }}
-                        </h1>
+                        <div class="flex flex-1 items-center gap-4 min-w-0">
+                            <h1 v-if="showHeader"
+                                class="shrink-0 text-xl font-semibold tracking-tight text-gemini-text">
+                                {{ library.label }}
+                            </h1>
 
-                        <div class="relative flex-1 max-w-lg">
-                            <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
-                            <input v-model="searchQuery" type="text"
-                                :placeholder="`Search ${library.label.toLowerCase()}...`"
-                                class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors"
-                                @keydown.esc="clearSearch" />
-                            <button v-if="searchQuery" type="button" aria-label="Clear search" title="Clear search"
-                                class="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg p-1 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
-                                @click="clearSearch">
-                                <X class="h-4 w-4" />
-                            </button>
+                            <div class="relative flex-1 max-w-lg">
+                                <Search
+                                    class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gemini-subtext" />
+                                <input v-model="searchQuery" type="text"
+                                    :placeholder="`Search ${library.label.toLowerCase()}...`"
+                                    class="w-full bg-gemini-card border border-gemini-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-gemini-text placeholder:text-gemini-subtext focus:outline-none focus:border-gemini-blue transition-colors"
+                                    @keydown.esc="clearSearch" />
+                                <button v-if="searchQuery" type="button" aria-label="Clear search" title="Clear search"
+                                    class="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg p-1 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
+                                    @click="clearSearch">
+                                    <X class="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 self-end sm:self-auto">
+                            <TagFilterDropdown v-model:selected-ids="selectedTagIds"
+                                v-model:match-mode="tagMatchMode" />
+
+                            <div
+                                class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
+                                <button @click="viewMode = 'grid'"
+                                    class="p-2 rounded-lg transition-colors cursor-pointer"
+                                    :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+                                    title="Grid View">
+                                    <Grid class="h-4 w-4" />
+                                </button>
+                                <button @click="viewMode = 'list'"
+                                    class="p-2 rounded-lg transition-colors cursor-pointer"
+                                    :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
+                                    title="List View">
+                                    <ListIcon class="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-2 self-end sm:self-auto">
-                        <TagFilterDropdown v-model:selected-ids="selectedTagIds" v-model:match-mode="tagMatchMode" />
-
-                        <div class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">
-                            <button @click="viewMode = 'grid'" class="p-2 rounded-lg transition-colors cursor-pointer"
-                                :class="viewMode === 'grid' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
-                                title="Grid View">
-                                <Grid class="h-4 w-4" />
-                            </button>
-                            <button @click="viewMode = 'list'" class="p-2 rounded-lg transition-colors cursor-pointer"
-                                :class="viewMode === 'list' ? 'bg-gemini-surface text-gemini-blue' : 'text-gemini-subtext hover:text-gemini-text'"
-                                title="List View">
-                                <ListIcon class="h-4 w-4" />
-                            </button>
-                        </div>
+                    <!-- Quick media-type filters for the unfiltered Files view -->
+                    <div v-if="showFilters" class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+                        <button v-for="filter in MEDIA_FILTERS" :key="filter.id" type="button"
+                            class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all"
+                            :class="selectedFilter === filter.id
+                                ? 'border border-gemini-blue/30 bg-gemini-surface text-gemini-blue shadow-xs'
+                                : 'border border-gemini-border bg-gemini-card text-gemini-subtext hover:border-gemini-subtext/40 hover:text-gemini-text'"
+                            @click="selectedFilter = filter.id">
+                            <component :is="filter.icon" class="h-4 w-4" />
+                            <span>{{ filter.label }}</span>
+                            <span class="rounded-md px-1.5 py-0.5 font-mono text-xs transition-colors"
+                                :class="selectedFilter === filter.id ? 'bg-gemini-blue/15 font-semibold text-gemini-blue' : 'bg-gemini-surface/80 text-gemini-subtext/70'">
+                                {{ formatCount(getFilterCount(filter.id)) }}
+                            </span>
+                        </button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Quick media-type filters for the unfiltered Files view -->
-                <div v-if="showFilters" class="mb-3 flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
-                    <button v-for="filter in MEDIA_FILTERS" :key="filter.id" type="button"
-                        class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all"
-                        :class="selectedFilter === filter.id
-                            ? 'border border-gemini-blue/30 bg-gemini-surface text-gemini-blue shadow-xs'
-                            : 'border border-gemini-border bg-gemini-card text-gemini-subtext hover:border-gemini-subtext/40 hover:text-gemini-text'"
-                        @click="selectedFilter = filter.id">
-                        <component :is="filter.icon" class="h-4 w-4" />
-                        <span>{{ filter.label }}</span>
-                        <span class="rounded-md px-1.5 py-0.5 font-mono text-xs transition-colors"
-                            :class="selectedFilter === filter.id ? 'bg-gemini-blue/15 font-semibold text-gemini-blue' : 'bg-gemini-surface/80 text-gemini-subtext/70'">
-                            {{ formatCount(getFilterCount(filter.id)) }}
-                        </span>
-                    </button>
-                </div>
-
-                <!-- Batch Action Bar -->
+            <!-- Batch Action Bar -->
+            <div ref="belowStickyEl">
                 <div v-if="selectedFileIds.size > 0"
                     class="mb-5 flex items-center justify-between gap-4 rounded-xl border border-gemini-blue/30 bg-gemini-blue/10 px-4 py-2.5">
                     <span class="text-sm font-medium text-gemini-blue">
@@ -486,7 +500,7 @@ onBeforeUnmount(() => {
                     <div>
                         <span v-if="searchQuery.trim()">
                             Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
-                                }}</strong> results
+                            }}</strong> results
                             <span v-if="hasScope"> in {{ scopeLabel }}</span>
                             for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                         </span>
@@ -496,7 +510,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span v-else>
                             <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString()
-                                }}</strong>
+                            }}</strong>
                             total
                             indexed files
                         </span>
