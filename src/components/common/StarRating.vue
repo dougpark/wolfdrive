@@ -39,7 +39,7 @@ function handleClick(event: MouseEvent) {
 </script>
 
 <template>
-    <div class="inline-flex items-center gap-0.5 text-amber-400" role="img"
+    <div class="inline-flex items-center gap-0.5 text-gemini-blue" role="img"
         :aria-label="`Rated ${rating} out of 5 stars`" :class="{ 'cursor-pointer': interactive }"
         @mousemove="handleMouseMove" @mouseleave="hoverIndex = 0" @click.stop="handleClick">
         <Star v-for="position in 5" :key="position" :class="iconClass"
