@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useSlots, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
 import FileActionsMenu from '@/components/common/FileActionsMenu.vue'
@@ -59,6 +59,7 @@ const viewMode = ref<'grid' | 'list'>('list')
 const sortKey = ref<SortKey>('modified')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const showSkeleton = computed(() => isLoading.value && !hasLoadedOnce.value)
+const router = useRouter()
 const { isDark } = useTheme()
 const {
     previewFile,
@@ -265,6 +266,15 @@ watch(tagMatchMode, () => {
     if (selectedTagIds.value.size) fetchFiles()
 })
 
+/** Audio files get a dedicated album playback view instead of the bare inline preview. */
+function handlePreview(file: MediaFile, list: MediaFile[]) {
+    if (file.mediaCategory === 'audio') {
+        router.push(`/music/play/${file.id}`)
+        return
+    }
+    openPreview(file, list)
+}
+
 onMounted(() => {
     // Deep-link support: /files?tags=tag_id from the tag manager's "view files" action.
     const routeTags = useRoute().query.tags
@@ -384,7 +394,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                        }}</strong> results
+                            }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -434,7 +444,7 @@ onMounted(() => {
                 :class="{ 'opacity-50': isLoading }">
                 <div v-for="file in files" :key="file.id"
                     class="group relative bg-gemini-card border border-gemini-border hover:border-gemini-blue rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
-                    @dblclick="openPreview(file, files)">
+                    @dblclick="handlePreview(file, files)">
                     <input type="checkbox" :checked="selectedFileIds.has(file.id)"
                         class="absolute left-3 top-3 z-10 h-4 w-4 cursor-pointer accent-gemini-blue"
                         :aria-label="`Select ${file.filename}`" @click.stop="toggleFileSelection(file.id)" />
@@ -498,7 +508,7 @@ onMounted(() => {
 
                 <div v-for="file in files" :key="file.id"
                     class="flex items-center justify-between px-5 py-3.5 hover:bg-gemini-surface/60 transition-colors cursor-pointer"
-                    @dblclick="openPreview(file, files)">
+                    @dblclick="handlePreview(file, files)">
                     <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-4">
                         <input type="checkbox" :checked="selectedFileIds.has(file.id)"
                             class="h-4 w-4 shrink-0 cursor-pointer accent-gemini-blue"
@@ -531,7 +541,7 @@ onMounted(() => {
                         <span class="w-20 text-right">{{ formatBytes(file.sizeBytes) }}</span>
                         <button type="button"
                             class="p-2 -m-2 rounded-lg text-gemini-subtext hover:bg-gemini-card hover:text-gemini-blue transition-colors cursor-pointer"
-                            :title="`Preview ${file.filename}`" @click.stop="openPreview(file, files)">
+                            :title="`Preview ${file.filename}`" @click.stop="handlePreview(file, files)">
                             <Eye class="h-4 w-4" />
                         </button>
                         <FileActionsMenu :file="file" @edit-categories="editingFile = file"

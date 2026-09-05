@@ -7,6 +7,7 @@
     "@libsql/client": "^0.17.4",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.4.0",
+    "@types/howler": "^2.2.13",
     "@types/node": "^26.4.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "autoprefixer": "^10.5.4",
@@ -22,8 +23,10 @@
     "drizzle-orm": "^0.45.2",
     "epubjs": "^0.3.93",
     "hono": "^4.13.5",
+    "howler": "^2.2.4",
     "lucide-vue-next": "^1.0.0",
     "md-editor-v3": "^6.5.6",
+    "music-metadata": "^11.15.0",
     "vue": "^3.5.42",
     "vue-router": "4"
   },

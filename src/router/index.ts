@@ -16,6 +16,7 @@ import PreviewView from '../views/PreviewView.vue'
 import TagsView from '../views/TagsView.vue'
 import ProjectsView from '../views/ProjectsView.vue'
 import ProjectView from '../views/ProjectView.vue'
+import MusicPlayerView from '../views/MusicPlayerView.vue'
 
 export const router = createRouter({
     history: createWebHistory(),
@@ -27,6 +28,7 @@ export const router = createRouter({
         { path: '/books', component: BooksView },
         { path: '/documents', component: DocumentsView },
         { path: '/music', component: MusicView },
+        { path: '/music/play/:id', component: MusicPlayerView },
         { path: '/movies', component: MoviesView },
         { path: '/tv-shows', component: TvShowsView },
         { path: '/games', component: GamesView },

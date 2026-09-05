@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Download, ExternalLink, MessageSquareText, MoreVertical, Tag as TagIcon, Tags } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { Download, ExternalLink, MessageSquareText, MoreVertical, PlayCircle, Tag as TagIcon, Tags } from 'lucide-vue-next'
 import { useAiChatPanel } from '@/composables/useAiChatPanel'
 import type { MediaFile } from '@/types/media'
 
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
+const router = useRouter()
 const streamUrl = computed(() => `/api/stream/${encodeURIComponent(props.file.id)}`)
 const previewUrl = computed(() => `/preview/${encodeURIComponent(props.file.id)}`)
 const { open: openAiPanel } = useAiChatPanel()
@@ -50,6 +52,11 @@ function downloadFile() {
 
 function openInNewTab() {
     window.open(previewUrl.value, '_blank', 'noopener,noreferrer')
+    closeMenu()
+}
+
+function playAlbum() {
+    router.push(`/music/play/${props.file.id}`)
     closeMenu()
 }
 
@@ -98,6 +105,12 @@ onBeforeUnmount(() => {
                 role="menuitem" @click="downloadFile">
                 <Download class="h-4 w-4 text-gemini-subtext" />
                 <span>Download</span>
+            </button>
+            <button v-if="props.file.mediaCategory === 'audio'" type="button"
+                class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                role="menuitem" @click="playAlbum">
+                <PlayCircle class="h-4 w-4 text-gemini-subtext" />
+                <span>Play</span>
             </button>
             <button type="button"
                 class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"

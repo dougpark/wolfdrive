@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
+import { dirname } from 'node:path'
+import { parseFile } from 'music-metadata'
 import { db } from './db'
 import { mediaDirectories } from './db/schema'
 import { eq, and, like, or, sql, inArray, asc } from 'drizzle-orm'
@@ -42,6 +44,28 @@ function canAttachFileContent(file: typeof mediaFiles.$inferSelect) {
 function contentDisposition(filename: string, disposition: 'inline' | 'attachment' = 'inline') {
     const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replaceAll('"', '')
     return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
+/** Small LRU-ish cache so repeated album/track visits don't re-parse tags off disk every time. */
+const AUDIO_METADATA_CACHE_LIMIT = 100
+const audioMetadataCache = new Map<string, Awaited<ReturnType<typeof parseFile>>>()
+
+async function getAudioMetadata(fileId: string, path: string) {
+    const cached = audioMetadataCache.get(fileId)
+    if (cached) return cached
+
+    const parsed = await parseFile(path, { duration: true, skipCovers: false })
+    if (audioMetadataCache.size >= AUDIO_METADATA_CACHE_LIMIT) {
+        const oldestKey = audioMetadataCache.keys().next().value
+        if (oldestKey) audioMetadataCache.delete(oldestKey)
+    }
+    audioMetadataCache.set(fileId, parsed)
+    return parsed
+}
+
+/** Natural sort so "2 - Track.m4a" sorts before "10 - Track.m4a". */
+function naturalCompare(a: string, b: string) {
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 
 async function buildFileAttachment(fileId: string, userId: string) {
@@ -913,6 +937,123 @@ app.get('/api/stream/:id', async (c) => {
             'Content-Disposition': contentDisposition(file.filename),
         },
     })
+})
+
+// GET /api/audio/:id/metadata - Parsed ID3/MP4 tags for the music player view
+app.get('/api/audio/:id/metadata', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const [file] = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId), eq(mediaFiles.mediaCategory, 'audio')))
+        .limit(1)
+
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    // Folder structure convention: artist/album/track.ext — used as a fallback when tags are missing.
+    const pathParts = file.relativePath.split('/')
+    const [fallbackArtist, fallbackAlbum] = pathParts.length >= 3 ? pathParts.slice(-3, -1) : [undefined, undefined]
+
+    try {
+        const parsed = await getAudioMetadata(file.id, file.path)
+        const { common, format } = parsed
+        return c.json({
+            title: common.title || file.filename.replace(/\.[^.]+$/, ''),
+            artist: common.artist || common.albumartist || fallbackArtist || 'Unknown Artist',
+            album: common.album || fallbackAlbum || 'Unknown Album',
+            trackNumber: common.track?.no ?? null,
+            year: common.year ?? null,
+            durationSec: format.duration ?? null,
+            hasArt: (common.picture?.length ?? 0) > 0,
+        })
+    } catch (error) {
+        console.error(`Failed to parse audio metadata for ${file.path}:`, error)
+        return c.json({
+            title: file.filename.replace(/\.[^.]+$/, ''),
+            artist: fallbackArtist || 'Unknown Artist',
+            album: fallbackAlbum || 'Unknown Album',
+            trackNumber: null,
+            year: null,
+            durationSec: null,
+            hasArt: false,
+        })
+    }
+})
+
+// GET /api/audio/:id/art - Embedded cover art (falls back to a folder cover image)
+app.get('/api/audio/:id/art', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const [file] = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId), eq(mediaFiles.mediaCategory, 'audio')))
+        .limit(1)
+
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    try {
+        const parsed = await getAudioMetadata(file.id, file.path)
+        const picture = parsed.common.picture?.[0]
+        if (picture) {
+            return new Response(Buffer.from(picture.data), {
+                headers: { 'Content-Type': picture.format, 'Cache-Control': 'private, max-age=86400' },
+            })
+        }
+    } catch (error) {
+        console.error(`Failed to read embedded art for ${file.path}:`, error)
+    }
+
+    // Fall back to a cover/folder image sitting alongside the track.
+    const albumDir = dirname(file.path)
+    for (const name of ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png']) {
+        const candidate = Bun.file(`${albumDir}/${name}`)
+        if (await candidate.exists()) {
+            return new Response(candidate, {
+                headers: { 'Content-Type': candidate.type || 'image/jpeg', 'Cache-Control': 'private, max-age=86400' },
+            })
+        }
+    }
+
+    return c.json({ error: 'No album art available' }, 404)
+})
+
+// GET /api/audio/:id/album - Sibling tracks in the same album folder, in playback order
+app.get('/api/audio/:id/album', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const [file] = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId), eq(mediaFiles.mediaCategory, 'audio')))
+        .limit(1)
+
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    const albumDir = dirname(file.relativePath)
+    const candidates = await db
+        .select()
+        .from(mediaFiles)
+        .where(and(
+            eq(mediaFiles.userId, userId),
+            eq(mediaFiles.directoryId, file.directoryId),
+            eq(mediaFiles.mediaCategory, 'audio'),
+            like(mediaFiles.relativePath, `${albumDir}/%`),
+        ))
+
+    // like() only anchors the prefix — filter out anything nested deeper than the album folder itself.
+    const tracks = candidates
+        .filter((track) => dirname(track.relativePath) === albumDir)
+        .sort((a, b) => naturalCompare(a.filename, b.filename))
+
+    return c.json(tracks)
 })
 
 // GET /api/stats - Fetch count breakdown across categories
