@@ -10,6 +10,8 @@ import TagFilterDropdown from '@/components/common/TagFilterDropdown.vue'
 import BatchTagPanel from '@/components/common/BatchTagPanel.vue'
 import BatchCategoryPanel from '@/components/common/BatchCategoryPanel.vue'
 import FilePreviewOverlay from '@/components/viewers/FilePreviewOverlay.vue'
+import StarRating from '@/components/common/StarRating.vue'
+import { getRating, setRating } from '@/composables/useFileRating'
 import type { MediaFile } from '@/types/media'
 import {
     LIBRARY_CATEGORIES,
@@ -279,6 +281,12 @@ function handlePreview(file: MediaFile, list: MediaFile[]) {
     openPreview(file, list)
 }
 
+async function handleRate(file: MediaFile, rating: number) {
+    const previousTags = file.tags
+    const updated = await setRating(file.id, rating)
+    file.tags = updated ?? previousTags
+}
+
 // The scrollable ancestor is AppLayout's <main>, not window; found lazily since
 // this component doesn't own that element. Saved/restored across keep-alive toggles.
 const rootEl = ref<HTMLElement | null>(null)
@@ -423,7 +431,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
@@ -518,6 +526,7 @@ onMounted(() => {
                     </div>
 
                     <div class="flex shrink-0 items-center gap-4">
+                        <span class="w-24 text-right">Rating</span>
                         <slot name="column-header"></slot>
                         <button v-for="column in SORT_COLUMNS" :key="column.key" type="button" :class="[
                             column.class,
@@ -564,6 +573,9 @@ onMounted(() => {
                     </div>
 
                     <div class="flex items-center gap-4 text-xs text-gemini-subtext shrink-0">
+                        <div class="w-24 flex justify-end" @click.stop>
+                            <StarRating :rating="getRating(file)" interactive @rate="(v) => handleRate(file, v)" />
+                        </div>
                         <slot v-if="hasExtraColumns" name="column-cell" :file="file"></slot>
                         <span class="uppercase font-mono w-12 text-right">{{ file.extension }}</span>
                         <span class="hidden sm:block w-24 text-right">{{ formatDate(file.mtimeMs) }}</span>

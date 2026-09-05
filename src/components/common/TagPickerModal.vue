@@ -15,6 +15,10 @@ const emit = defineEmits<{
 
 const { allTags, fetchTags, createTag } = useTags()
 
+// Rating tags (1-star..5-star) are managed exclusively via the Rating action to
+// guarantee only one is ever attached to a file; keep them out of this picker.
+const RATING_TAG_PATTERN = /^[1-5]-star$/
+
 const selected = ref<Tag[]>([...(props.file.tags ?? [])])
 const query = ref('')
 const isSaving = ref(false)
@@ -25,14 +29,16 @@ const suggestions = computed(() => {
     const q = query.value.trim().toLowerCase()
     const selectedIds = new Set(selected.value.map((t) => t.id))
     return allTags.value
-        .filter((t) => !selectedIds.has(t.id) && (!q || t.name.toLowerCase().includes(q)))
+        .filter((t) => !RATING_TAG_PATTERN.test(t.name) && !selectedIds.has(t.id) && (!q || t.name.toLowerCase().includes(q)))
         .slice(0, 8)
 })
 
 const exactMatch = computed(() =>
     allTags.value.some((t) => t.name.toLowerCase() === query.value.trim().toLowerCase()),
 )
-const canCreate = computed(() => query.value.trim().length > 0 && !exactMatch.value)
+const canCreate = computed(() =>
+    query.value.trim().length > 0 && !exactMatch.value && !RATING_TAG_PATTERN.test(query.value.trim().toLowerCase()),
+)
 
 function addTag(tag: Tag) {
     if (selected.value.some((t) => t.id === tag.id)) return

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Download, ExternalLink, MessageSquareText, MoreVertical, PlayCircle, Tag as TagIcon, Tags } from 'lucide-vue-next'
+import { ChevronLeft, Download, ExternalLink, MessageSquareText, MoreVertical, PlayCircle, Star, Tag as TagIcon, Tags } from 'lucide-vue-next'
 import { useAiChatPanel } from '@/composables/useAiChatPanel'
+import { getRating, setRating } from '@/composables/useFileRating'
+import StarRating from '@/components/common/StarRating.vue'
 import type { MediaFile } from '@/types/media'
 
 const props = withDefaults(defineProps<{
@@ -22,6 +24,7 @@ const rootEl = ref<HTMLElement | null>(null)
 const router = useRouter()
 const streamUrl = computed(() => `/api/stream/${encodeURIComponent(props.file.id)}`)
 const previewUrl = computed(() => `/preview/${encodeURIComponent(props.file.id)}`)
+const currentRating = computed(() => getRating(props.file))
 const { open: openAiPanel } = useAiChatPanel()
 
 function closeMenu() {
@@ -57,6 +60,12 @@ function openInNewTab() {
 
 function playAlbum() {
     router.push(`/music/play/${props.file.id}`)
+    closeMenu()
+}
+
+async function rate(value: number) {
+    const updated = await setRating(props.file.id, value)
+    if (updated) props.file.tags = updated
     closeMenu()
 }
 
@@ -118,6 +127,26 @@ onBeforeUnmount(() => {
                 <ExternalLink class="h-4 w-4 text-gemini-subtext" />
                 <span>Open in new tab</span>
             </button>
+            <div class="group/rating relative">
+                <button type="button"
+                    class="flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                    role="menuitem">
+                    <span class="flex items-center gap-3">
+                        <Star class="h-4 w-4 text-gemini-subtext" />
+                        <span>Rating</span>
+                    </span>
+                    <ChevronLeft class="h-3.5 w-3.5 text-gemini-subtext" />
+                </button>
+                <div
+                    class="absolute right-full top-0 z-50 mr-1 hidden w-40 overflow-hidden rounded-xl border border-gemini-border bg-gemini-card py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)] group-hover/rating:block">
+                    <button v-for="n in 6" :key="n" type="button"
+                        class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
+                        :class="currentRating === n - 1 ? 'bg-gemini-blue/10' : ''" role="menuitem"
+                        @click="rate(n - 1)">
+                        <StarRating :rating="n - 1" size="sm" />
+                    </button>
+                </div>
+            </div>
             <button type="button"
                 class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gemini-surface"
                 role="menuitem" @click="editCategories">

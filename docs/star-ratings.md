@@ -7,8 +7,20 @@
 - allow user to clear the rating by clicking the first star again
 - Hover State: Provide visual feedback on hover (★ ★ ★ ☆ ☆) before the user clicks to confirm the rating.
 
-## Show in FileBrowser
+## Show in FileBrowser for all category types
 - create a new Rating column left of the type column
+- show the star rating as filled and outlined stars (★ ★ ★ ☆ ☆)
+
+
+## Action Menu
+- add a new Rating item to the action menu 
+- on hover show a submenu with 
+  - 0 stars (☆ ☆ ☆ ☆ ☆)
+  - 1 star (★ ☆ ☆ ☆ ☆)
+  - 2 stars (★ ★ ☆ ☆ ☆)
+  - 3 stars (★ ★ ★ ☆ ☆)
+  - 4 stars (★ ★ ★ ★ ☆)
+  - 5 stars (★ ★ ★ ★ ★)
 
 
 ## Tags

@@ -264,6 +264,26 @@ function slugifyTag(name: string): string {
     return name.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+/** The five mutually-exclusive star-rating tags, keyed by rating (1-5). */
+const RATING_TAG_NAMES = ['1-star', '2-star', '3-star', '4-star', '5-star']
+
+/** Idempotent find-or-create by name, shared by the tag picker and the star-rating endpoint. */
+async function findOrCreateTag(userId: string, name: string) {
+    const slug = slugifyTag(name)
+    const [existing] = await db
+        .select()
+        .from(tags)
+        .where(and(eq(tags.userId, userId), eq(tags.slug, slug)))
+        .limit(1)
+    if (existing) return existing
+
+    const [created] = await db
+        .insert(tags)
+        .values({ id: `tag_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`, userId, name, slug })
+        .returning()
+    return created!
+}
+
 /**
  * Batch-fetches tags for a page of file ids and groups them by file id. Always called
  * *after* the primary query has paginated, never joined before LIMIT, so a to-many
@@ -552,23 +572,9 @@ app.post('/api/tags', async (c) => {
     if (!name) {
         return c.json({ error: 'name is required' }, 400)
     }
-    const slug = slugifyTag(name)
 
-    const [existing] = await db
-        .select()
-        .from(tags)
-        .where(and(eq(tags.userId, userId), eq(tags.slug, slug)))
-        .limit(1)
-    if (existing) {
-        return c.json(existing)
-    }
-
-    const [created] = await db
-        .insert(tags)
-        .values({ id: `tag_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`, userId, name, slug })
-        .returning()
-
-    return c.json(created, 201)
+    const tag = await findOrCreateTag(userId, name)
+    return c.json(tag)
 })
 
 // PATCH /api/tags/:id - Rename a tag
@@ -831,6 +837,54 @@ app.put('/api/files/:id/tags', async (c) => {
         .orderBy(asc(tags.name))
 
     return c.json(rows)
+})
+
+// PUT /api/files/:id/rating - Set a 0-5 star rating, stored as a mutually-exclusive "N-star" tag
+app.put('/api/files/:id/rating', async (c) => {
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    const body = await c.req.json<{ rating?: unknown }>()
+
+    const rating = typeof body.rating === 'number' ? Math.trunc(body.rating) : NaN
+    if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
+        return c.json({ error: 'rating must be an integer between 0 and 5' }, 400)
+    }
+
+    const [file] = await db
+        .select({ id: mediaFiles.id })
+        .from(mediaFiles)
+        .where(and(eq(mediaFiles.id, id), eq(mediaFiles.userId, userId)))
+        .limit(1)
+    if (!file) {
+        return c.json({ error: 'File not found' }, 404)
+    }
+
+    // Exact-name match only — never LIKE '%-star', so a legitimately-named tag can't be swept up.
+    const ratingTags = await db
+        .select({ id: tags.id })
+        .from(tags)
+        .where(and(eq(tags.userId, userId), inArray(tags.name, RATING_TAG_NAMES)))
+    const ratingTagIds = ratingTags.map((t) => t.id)
+
+    const targetTag = rating > 0 ? await findOrCreateTag(userId, `${rating}-star`) : null
+
+    db.transaction((tx) => {
+        if (ratingTagIds.length) {
+            tx.delete(fileTags).where(and(eq(fileTags.fileId, id), inArray(fileTags.tagId, ratingTagIds))).run()
+        }
+        if (targetTag) {
+            tx.insert(fileTags).values({ fileId: id, tagId: targetTag.id }).run()
+        }
+    })
+
+    const updatedTags = await db
+        .select({ id: tags.id, name: tags.name, color: tags.color })
+        .from(fileTags)
+        .innerJoin(tags, eq(fileTags.tagId, tags.id))
+        .where(eq(fileTags.fileId, id))
+        .orderBy(asc(tags.name))
+
+    return c.json(updatedTags)
 })
 
 // GET /api/tags/usage?ids=a,b,c - Per-tag usage counts across a batch of files (drives the tri-state batch tag panel)
