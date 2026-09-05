@@ -41,6 +41,7 @@ const {
     position,
     duration,
     volume,
+    loadError,
     currentTrack,
     load,
     playIndex,
@@ -153,6 +154,11 @@ onBeforeUnmount(() => {
                 <ArrowLeft class="h-4 w-4" />
                 Back
             </button>
+
+            <div v-if="loadError"
+                class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600">
+                {{ loadError }}
+            </div>
 
             <div class="rounded-3xl border border-gemini-border bg-gemini-card p-8 shadow-sm">
                 <div class="flex flex-col gap-8 sm:flex-row">

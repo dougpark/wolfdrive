@@ -10,6 +10,7 @@ export function useMusicPlayer() {
     const position = ref(0)
     const duration = ref(0)
     const volume = ref(1)
+    const loadError = ref('')
 
     const howl = shallowRef<Howl | null>(null)
     let rafId: number | null = null
@@ -40,23 +41,38 @@ export function useMusicPlayer() {
         howl.value = null
     }
 
-    function playIndex(index: number) {
+    function playIndex(index: number, attemptsRemaining = playlist.value.length) {
         if (index < 0 || index >= playlist.value.length) return
         teardownHowl()
         currentIndex.value = index
         position.value = 0
         duration.value = 0
+        loadError.value = ''
 
         const track = playlist.value[index]
         if (!track) return
         const trackId = track.id
         const trackExtension = track.extension
+
+        // A stale index entry (file moved/deleted since the last scan) fails to load/decode;
+        // skip to the next track instead of stalling playback, bounded to avoid infinite loops.
+        function skipBrokenTrack() {
+            isPlaying.value = false
+            stopProgressLoop()
+            loadError.value = `"${track!.filename}" is unavailable and was skipped.`
+            if (attemptsRemaining > 1 && currentIndex.value < playlist.value.length - 1) {
+                playIndex(currentIndex.value + 1, attemptsRemaining - 1)
+            }
+        }
+
         const instance = new Howl({
             src: [`/api/stream/${trackId}`],
             html5: true,
             volume: volume.value,
             format: [trackExtension],
             onload: () => { duration.value = instance.duration() },
+            onloaderror: skipBrokenTrack,
+            onplayerror: skipBrokenTrack,
             onplay: () => { isPlaying.value = true; startProgressLoop() },
             onpause: () => { isPlaying.value = false; stopProgressLoop() },
             onend: () => {
@@ -110,6 +126,7 @@ export function useMusicPlayer() {
         position,
         duration,
         volume,
+        loadError,
         currentTrack,
         load,
         playIndex,

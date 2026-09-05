@@ -143,7 +143,7 @@ async function triggerScanAll() {
   try {
     const res = await fetch('/api/scan', { method: 'POST' })
     const data = await res.json()
-    console.log(`Scan completed: ${data.totalIndexed} indexed, ${data.totalSkipped} skipped.`)
+    console.log(`Scan completed: ${data.totalIndexed} indexed, ${data.totalSkipped} skipped, ${data.totalPruned} stale entries removed.`)
     await fetchDirectories()
   } catch (err) {
     console.error('Scan failed', err)

@@ -4,9 +4,9 @@ console.log('🔍 Starting local media scan...')
 const startTime = performance.now()
 
 scanAllUserDirectories('usr_default')
-    .then(({ totalIndexed, totalSkipped }) => {
+    .then(({ totalIndexed, totalSkipped, totalPruned }) => {
         const elapsed = ((performance.now() - startTime) / 1000).toFixed(2)
-        console.log(`✅ Scan completed in ${elapsed}s: ${totalIndexed} files indexed/updated, ${totalSkipped} unchanged.`)
+        console.log(`✅ Scan completed in ${elapsed}s: ${totalIndexed} files indexed/updated, ${totalSkipped} unchanged, ${totalPruned} stale entries removed.`)
         process.exit(0)
     })
     .catch((err) => {

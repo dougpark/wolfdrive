@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises'
 import { join, extname, relative } from 'node:path'
 import { db } from '../db'
 import { mediaDirectories, mediaFiles } from '../db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { appSettings } from '../db/schema'
 
 // Helper to load current ignore patterns from DB
@@ -49,14 +49,16 @@ function getMediaCategory(mimeType: string, ext: string): string {
     return 'other'
 }
 
-export async function scanDirectory(directoryId: string): Promise<{ indexed: number; skipped: number }> {
+export async function scanDirectory(directoryId: string): Promise<{ indexed: number; skipped: number; pruned: number }> {
     const ignorePatterns = await getIgnorePatterns()
 
     const [dir] = await db.select().from(mediaDirectories).where(eq(mediaDirectories.id, directoryId))
-    if (!dir || !dir.enabled) return { indexed: 0, skipped: 0 }
+    if (!dir || !dir.enabled) return { indexed: 0, skipped: 0, pruned: 0 }
 
     let indexedCount = 0
     let skippedCount = 0
+    // Paths seen on disk this scan; anything indexed under this directory but absent here is stale.
+    const visitedPaths = new Set<string>()
 
     try {
         // Fast native recursive directory traversal
@@ -70,6 +72,7 @@ export async function scanDirectory(directoryId: string): Promise<{ indexed: num
 
             const parent = entry.parentPath ?? (entry as { path?: string }).path ?? dir.path
             const absolutePath = join(parent, entry.name)
+            visitedPaths.add(absolutePath)
 
             const relPath = relative(dir.path, absolutePath)
 
@@ -144,19 +147,31 @@ export async function scanDirectory(directoryId: string): Promise<{ indexed: num
         throw err
     }
 
-    return { indexed: indexedCount, skipped: skippedCount }
+    // Prune rows whose file no longer exists at its indexed path (moved/renamed/deleted on disk).
+    const existingRows = await db
+        .select({ id: mediaFiles.id, path: mediaFiles.path })
+        .from(mediaFiles)
+        .where(eq(mediaFiles.directoryId, dir.id))
+    const staleIds = existingRows.filter((row) => !visitedPaths.has(row.path)).map((row) => row.id)
+    if (staleIds.length) {
+        await db.delete(mediaFiles).where(inArray(mediaFiles.id, staleIds))
+    }
+
+    return { indexed: indexedCount, skipped: skippedCount, pruned: staleIds.length }
 }
 
 export async function scanAllUserDirectories(userId: string) {
     const dirs = await db.select().from(mediaDirectories).where(eq(mediaDirectories.userId, userId))
     let totalIndexed = 0
     let totalSkipped = 0
+    let totalPruned = 0
 
     for (const dir of dirs) {
         const result = await scanDirectory(dir.id)
         totalIndexed += result.indexed
         totalSkipped += result.skipped
+        totalPruned += result.pruned
     }
 
-    return { totalIndexed, totalSkipped }
+    return { totalIndexed, totalSkipped, totalPruned }
 }
