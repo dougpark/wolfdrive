@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, ref, useSlots, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from '@/composables/useTheme'
 import { useFilePreview } from '@/composables/useFilePreview'
@@ -275,6 +275,31 @@ function handlePreview(file: MediaFile, list: MediaFile[]) {
     openPreview(file, list)
 }
 
+// The scrollable ancestor is AppLayout's <main>, not window; found lazily since
+// this component doesn't own that element. Saved/restored across keep-alive toggles.
+const rootEl = ref<HTMLElement | null>(null)
+let scrollParent: HTMLElement | null = null
+let savedScrollTop = 0
+
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+    let node = el?.parentElement ?? null
+    while (node) {
+        const overflowY = getComputedStyle(node).overflowY
+        if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) return node
+        node = node.parentElement
+    }
+    return null
+}
+
+onActivated(() => {
+    if (!scrollParent) scrollParent = findScrollParent(rootEl.value)
+    if (scrollParent) scrollParent.scrollTop = savedScrollTop
+})
+
+onDeactivated(() => {
+    if (scrollParent) savedScrollTop = scrollParent.scrollTop
+})
+
 onMounted(() => {
     // Deep-link support: /files?tags=tag_id from the tag manager's "view files" action.
     const routeTags = useRoute().query.tags
@@ -287,7 +312,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="bg-gemini-bg text-gemini-text transition-colors duration-200">
+    <div ref="rootEl" class="bg-gemini-bg text-gemini-text transition-colors duration-200">
         <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
             <!-- Top Bar: Title, Search & View Toggles -->
@@ -394,7 +419,7 @@ onMounted(() => {
                 <div>
                     <span v-if="searchQuery.trim()">
                         Found <strong class="text-gemini-text font-semibold">{{ files.length.toLocaleString()
-                            }}</strong> results
+                        }}</strong> results
                         <span v-if="hasScope"> in {{ scopeLabel }}</span>
                         for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                     </span>
