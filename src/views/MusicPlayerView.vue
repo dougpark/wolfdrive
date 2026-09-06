@@ -3,6 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
     ArrowLeft,
+    ChevronLeft,
+    ChevronRight,
+    Info,
     Music,
     Pause,
     Play,
@@ -11,6 +14,7 @@ import {
     Volume1,
     Volume2,
     VolumeX,
+    X,
 } from 'lucide-vue-next'
 import { useMusicPlayer } from '@/composables/useMusicPlayer'
 import type { MediaFile } from '@/types/media'
@@ -33,6 +37,11 @@ const isLoading = ref(true)
 const errorMessage = ref('')
 const trackMeta = ref<AudioMetadata | null>(null)
 const artFailed = ref(false)
+const metadataPanelIndex = ref<number | null>(null)
+const metadataPanelMeta = ref<AudioMetadata | null>(null)
+const metadataPanelLoading = ref(false)
+const metadataPanelError = ref('')
+let metadataRequestId = 0
 
 const {
     playlist,
@@ -62,6 +71,17 @@ const volumeIcon = computed(() => {
     return volume.value < 0.5 ? Volume1 : Volume2
 })
 
+const metadataPanelTrack = computed(() => {
+    const index = metadataPanelIndex.value
+    return index === null ? null : playlist.value[index] ?? null
+})
+
+const metadataPanelHasPrevious = computed(() => (metadataPanelIndex.value ?? 0) > 0)
+const metadataPanelHasNext = computed(() => {
+    const index = metadataPanelIndex.value
+    return index !== null && index < playlist.value.length - 1
+})
+
 function formatTime(seconds: number) {
     if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
     const mins = Math.floor(seconds / 60)
@@ -84,9 +104,33 @@ async function fetchTrackMeta(fileId: string) {
     }
 }
 
+async function fetchMetadataPanelMeta(fileId: string) {
+    const requestId = ++metadataRequestId
+    metadataPanelLoading.value = true
+    metadataPanelError.value = ''
+    metadataPanelMeta.value = null
+    try {
+        const res = await fetch(`/api/audio/${fileId}/metadata`)
+        if (!res.ok) throw new Error(`Metadata request failed: ${res.status}`)
+        const data = await res.json() as AudioMetadata
+        if (requestId === metadataRequestId) metadataPanelMeta.value = data
+    } catch (error) {
+        console.error('Failed to load playlist track metadata:', error)
+        if (requestId === metadataRequestId) {
+            metadataPanelError.value = 'Unable to load metadata for this track.'
+        }
+    } finally {
+        if (requestId === metadataRequestId) metadataPanelLoading.value = false
+    }
+}
+
 watch(currentIndex, (index) => {
     const track = playlist.value[index]
     if (track) fetchTrackMeta(track.id)
+})
+
+watch(metadataPanelTrack, (track) => {
+    if (track) fetchMetadataPanelMeta(track.id)
 })
 
 async function loadAlbum() {
@@ -131,9 +175,56 @@ function trackLabel(file: MediaFile) {
     return file.filename.replace(/\.[^.]+$/, '')
 }
 
-onMounted(loadAlbum)
+function formatFileSize(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+    const value = bytes / Math.pow(1024, exponent)
+    return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`
+}
+
+function formatDate(ms: number) {
+    if (!Number.isFinite(ms) || ms <= 0) return '—'
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ms))
+}
+
+function openMetadataPanel(index: number) {
+    if (index < 0 || index >= playlist.value.length) return
+    metadataPanelIndex.value = index
+}
+
+function closeMetadataPanel() {
+    metadataPanelIndex.value = null
+    metadataPanelMeta.value = null
+    metadataPanelError.value = ''
+}
+
+function showPreviousMetadata() {
+    if (!metadataPanelHasPrevious.value || metadataPanelIndex.value === null) return
+    metadataPanelIndex.value -= 1
+}
+
+function showNextMetadata() {
+    if (!metadataPanelHasNext.value || metadataPanelIndex.value === null) return
+    metadataPanelIndex.value += 1
+}
+
+function onMetadataPanelKeydown(event: KeyboardEvent) {
+    if (metadataPanelIndex.value === null) return
+    if (event.key === 'Escape') closeMetadataPanel()
+    else if (event.key === 'ArrowLeft') showPreviousMetadata()
+    else if (event.key === 'ArrowRight') showNextMetadata()
+    else return
+    event.preventDefault()
+}
+
+onMounted(() => {
+    loadAlbum()
+    document.addEventListener('keydown', onMetadataPanelKeydown)
+})
 
 onBeforeUnmount(() => {
+    document.removeEventListener('keydown', onMetadataPanelKeydown)
     document.title = originalTitle
 })
 </script>
@@ -224,19 +315,135 @@ onBeforeUnmount(() => {
                     Playlist
                 </div>
                 <div class="divide-y divide-gemini-border">
-                    <button v-for="(track, index) in playlist" :key="track.id" type="button"
-                        class="flex w-full cursor-pointer items-center justify-between gap-3 px-6 py-3 text-left transition-colors hover:bg-gemini-surface/60"
-                        :class="index === currentIndex ? 'bg-gemini-blue/10' : ''" @click="playIndex(index)">
-                        <span class="min-w-0 truncate text-sm"
-                            :class="index === currentIndex ? 'font-semibold text-gemini-blue' : 'text-gemini-text'">
-                            {{ index + 1 }}. {{ trackLabel(track) }}
-                        </span>
-                        <span v-if="index === currentIndex && isPlaying" class="shrink-0 text-xs text-gemini-blue">
-                            Playing
-                        </span>
-                    </button>
+                    <div v-for="(track, index) in playlist" :key="track.id"
+                        class="flex items-center gap-2 px-4 py-2 transition-colors hover:bg-gemini-surface/60"
+                        :class="index === currentIndex ? 'bg-gemini-blue/10' : ''">
+                        <button type="button"
+                            class="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1 text-left"
+                            @click="playIndex(index)">
+                            <span class="min-w-0 truncate text-sm"
+                                :class="index === currentIndex ? 'font-semibold text-gemini-blue' : 'text-gemini-text'">
+                                {{ index + 1 }}. {{ trackLabel(track) }}
+                            </span>
+                            <span v-if="index === currentIndex && isPlaying" class="shrink-0 text-xs text-gemini-blue">
+                                Playing
+                            </span>
+                        </button>
+                        <button type="button"
+                            class="shrink-0 cursor-pointer rounded-xl p-2 text-gemini-subtext transition-colors hover:bg-gemini-card hover:text-gemini-blue"
+                            :aria-label="`Show metadata for ${trackLabel(track)}`" title="Track metadata"
+                            @click="openMetadataPanel(index)">
+                            <Info class="h-4 w-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
+        </div>
+
+        <div v-if="metadataPanelTrack"
+            class="fixed inset-0 z-50 flex justify-end bg-black/40 p-4 backdrop-blur-sm sm:p-6" role="dialog"
+            aria-modal="true" :aria-label="`Metadata for ${trackLabel(metadataPanelTrack)}`"
+            @click.self="closeMetadataPanel">
+            <section
+                class="flex h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-gemini-border bg-gemini-card shadow-sm">
+                <header class="flex shrink-0 items-start justify-between gap-4 border-b border-gemini-border p-6">
+                    <div class="min-w-0">
+                        <p class="text-xs font-medium uppercase tracking-wide text-gemini-subtext">
+                            {{ (metadataPanelIndex ?? 0) + 1 }} of {{ playlist.length }}
+                        </p>
+                        <h2 class="mt-1 truncate text-xl font-semibold tracking-tight text-gemini-text">
+                            {{ metadataPanelMeta?.title || trackLabel(metadataPanelTrack) }}
+                        </h2>
+                        <p class="truncate text-sm text-gemini-subtext">
+                            {{ metadataPanelMeta?.artist || 'Unknown artist' }}
+                        </p>
+                    </div>
+                    <button type="button"
+                        class="cursor-pointer rounded-xl p-2 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text"
+                        aria-label="Close metadata panel" title="Close" @click="closeMetadataPanel">
+                        <X class="h-5 w-5" />
+                    </button>
+                </header>
+
+                <div class="min-h-0 flex-1 overflow-auto p-6">
+                    <div v-if="metadataPanelLoading" class="text-sm text-gemini-subtext">Loading metadata...</div>
+                    <div v-else-if="metadataPanelError" class="text-sm text-amber-600">{{ metadataPanelError }}</div>
+                    <dl v-else class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">Title</dt>
+                            <dd class="mt-1 truncate font-medium text-gemini-text">
+                                {{ metadataPanelMeta?.title || trackLabel(metadataPanelTrack) }}
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">Artist</dt>
+                            <dd class="mt-1 truncate font-medium text-gemini-text">
+                                {{ metadataPanelMeta?.artist || '—' }}
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">Album</dt>
+                            <dd class="mt-1 truncate font-medium text-gemini-text">
+                                {{ metadataPanelMeta?.album || '—' }}
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">Track</dt>
+                            <dd class="mt-1 font-medium text-gemini-text">
+                                {{ metadataPanelMeta?.trackNumber ?? '—' }}
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">Year</dt>
+                            <dd class="mt-1 font-medium text-gemini-text">{{ metadataPanelMeta?.year ?? '—' }}</dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">Duration</dt>
+                            <dd class="mt-1 font-medium text-gemini-text">
+                                {{ formatTime(metadataPanelMeta?.durationSec ?? 0) }}
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">File type</dt>
+                            <dd class="mt-1 font-medium text-gemini-text">{{ metadataPanelTrack.mimeType }}</dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4">
+                            <dt class="text-xs font-medium text-gemini-subtext">File size</dt>
+                            <dd class="mt-1 font-medium text-gemini-text">{{
+                                formatFileSize(metadataPanelTrack.sizeBytes) }}</dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4 sm:col-span-2">
+                            <dt class="text-xs font-medium text-gemini-subtext">Path</dt>
+                            <dd class="mt-1 break-words font-medium text-gemini-text">
+                                {{ metadataPanelTrack.relativePath }}
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-gemini-surface p-4 sm:col-span-2">
+                            <dt class="text-xs font-medium text-gemini-subtext">Modified</dt>
+                            <dd class="mt-1 font-medium text-gemini-text">{{ formatDate(metadataPanelTrack.mtimeMs) }}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <footer class="flex shrink-0 items-center justify-between gap-3 border-t border-gemini-border p-4">
+                    <button type="button"
+                        class="cursor-pointer rounded-xl p-3 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
+                        :disabled="!metadataPanelHasPrevious" title="Previous track" @click="showPreviousMetadata">
+                        <ChevronLeft class="h-5 w-5" />
+                    </button>
+                    <button type="button"
+                        class="cursor-pointer rounded-full bg-gemini-blue px-6 py-3 text-sm font-medium text-white transition-all hover:opacity-90"
+                        @click="playIndex(metadataPanelIndex ?? 0)">
+                        Play track
+                    </button>
+                    <button type="button"
+                        class="cursor-pointer rounded-xl p-3 text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-text disabled:cursor-not-allowed disabled:opacity-40"
+                        :disabled="!metadataPanelHasNext" title="Next track" @click="showNextMetadata">
+                        <ChevronRight class="h-5 w-5" />
+                    </button>
+                </footer>
+            </section>
         </div>
     </main>
 </template>
