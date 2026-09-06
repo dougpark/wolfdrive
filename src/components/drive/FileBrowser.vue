@@ -293,6 +293,12 @@ async function handleRate(file: MediaFile, rating: number) {
     file.tags = updated ?? previousTags
 }
 
+function handleFileTagsUpdated(event: Event) {
+    const { fileId, tags } = (event as CustomEvent<{ fileId: string; tags: MediaFile['tags'] }>).detail
+    const matchingFile = files.value.find((file) => file.id === fileId)
+    if (matchingFile) matchingFile.tags = tags
+}
+
 // The scrollable ancestor is AppLayout's <main>, not window; found lazily since
 // this component doesn't own that element. Saved/restored across keep-alive toggles,
 // and reused below as the row virtualizer's scroll element.
@@ -321,6 +327,14 @@ onActivated(() => {
 
 onDeactivated(() => {
     if (scrollParentRef.value) savedScrollTop = scrollParentRef.value.scrollTop
+})
+
+onMounted(() => {
+    window.addEventListener('wolfdrive:file-tags-updated', handleFileTagsUpdated)
+})
+
+onBeforeUnmount(() => {
+    window.removeEventListener('wolfdrive:file-tags-updated', handleFileTagsUpdated)
 })
 
 // --- List-view row virtualization: up to 1000 rows would otherwise all mount at once ---
@@ -500,7 +514,7 @@ onBeforeUnmount(() => {
                     <div>
                         <span v-if="searchQuery.trim()">
                             Found <strong class="text-gemini-text font-semibold">{{ totalMatchCount.toLocaleString()
-                                }}</strong> results
+                            }}</strong> results
                             <span v-if="hasScope"> in {{ scopeLabel }}</span>
                             for "<span class="italic text-gemini-text">{{ searchQuery }}</span>"
                         </span>
@@ -510,7 +524,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span v-else>
                             <strong class="text-gemini-text font-semibold">{{ totalFileCount.toLocaleString()
-                                }}</strong>
+                            }}</strong>
                             total
                             indexed files
                         </span>

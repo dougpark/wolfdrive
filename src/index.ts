@@ -1115,7 +1115,8 @@ app.get('/api/audio/:id/album', async (c) => {
         .filter((track) => dirname(track.relativePath) === albumDir)
         .sort((a, b) => naturalCompare(a.filename, b.filename))
 
-    return c.json(tracks)
+    const tagsByFile = await attachTags(tracks.map((track) => track.id))
+    return c.json(tracks.map((track) => ({ ...track, tags: tagsByFile.get(track.id) ?? [] })))
 })
 
 // GET /api/stats - Fetch count breakdown across categories

@@ -16,6 +16,8 @@ import {
     VolumeX,
     X,
 } from 'lucide-vue-next'
+import StarRating from '@/components/common/StarRating.vue'
+import { getRating, setRating } from '@/composables/useFileRating'
 import { useMusicPlayer } from '@/composables/useMusicPlayer'
 import type { MediaFile } from '@/types/media'
 
@@ -175,6 +177,17 @@ function trackLabel(file: MediaFile) {
     return file.filename.replace(/\.[^.]+$/, '')
 }
 
+async function handleRate(file: MediaFile, rating: number) {
+    const previousTags = file.tags
+    const updated = await setRating(file.id, rating)
+    file.tags = updated ?? previousTags
+    if (updated) {
+        window.dispatchEvent(new CustomEvent('wolfdrive:file-tags-updated', {
+            detail: { fileId: file.id, tags: updated },
+        }))
+    }
+}
+
 function formatFileSize(bytes: number) {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
     const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -329,6 +342,10 @@ onBeforeUnmount(() => {
                                 Playing
                             </span>
                         </button>
+                        <div class="flex w-24 shrink-0 justify-end" @click.stop>
+                            <StarRating :rating="getRating(track)" interactive
+                                @rate="(value) => handleRate(track, value)" />
+                        </div>
                         <button type="button"
                             class="shrink-0 cursor-pointer rounded-xl p-2 text-gemini-subtext transition-colors hover:bg-gemini-card hover:text-gemini-blue"
                             :aria-label="`Show metadata for ${trackLabel(track)}`" title="Track metadata"
