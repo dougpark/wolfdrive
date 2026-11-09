@@ -179,6 +179,38 @@ export const researchPropertyOwners = sqliteTable('research_property_owners', {
     index('research_property_owners_name_idx').on(table.ownerName),
 ])
 
+export const researchDeeds = sqliteTable('research_deeds', {
+    id: text('id').primaryKey(),
+    addressId: text('address_id').notNull().references(() => researchAddresses.id, { onDelete: 'cascade' }),
+    sourceId: text('source_id').notNull().references(() => researchSources.id),
+    sourceDeedId: text('source_deed_id').notNull(),
+    parcelId: text('parcel_id').notNull(),
+    deedDate: text('deed_date'),
+    rawDeedDate: text('raw_deed_date'),
+    deedType: text('deed_type'),
+    description: text('description'),
+    grantor: text('grantor'),
+    grantee: text('grantee'),
+    book: text('book'),
+    volume: text('volume'),
+    page: text('page'),
+    instrumentNumber: text('instrument_number'),
+    verificationStatus: text('verification_status').notNull().default('unverified'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    uniqueIndex('research_deeds_address_source_deed_idx').on(table.addressId, table.sourceDeedId),
+    index('research_deeds_grantee_idx').on(table.grantee),
+    index('research_deeds_grantor_idx').on(table.grantor),
+])
+
+export const researchDeedLookups = sqliteTable('research_deed_lookups', {
+    addressId: text('address_id').primaryKey().references(() => researchAddresses.id, { onDelete: 'cascade' }),
+    parcelId: text('parcel_id').notNull(),
+    sourceId: text('source_id').notNull().references(() => researchSources.id),
+    retrievedAt: text('retrieved_at').notNull(),
+    deedCount: integer('deed_count').notNull(),
+})
+
 export const researchEvents = sqliteTable('research_events', {
     id: text('id').primaryKey(),
     addressId: text('address_id').notNull().references(() => researchAddresses.id, { onDelete: 'cascade' }),

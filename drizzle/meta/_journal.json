@@ -120,6 +120,13 @@
       "when": 1794204940561,
       "tag": "0016_vengeful_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794206962485,
+      "tag": "0017_flimsy_legion",
+      "breakpoints": true
     }
   ]
 }

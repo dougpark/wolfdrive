@@ -62,10 +62,27 @@ interface ResearchEvent {
     source: ResearchSource
 }
 
+interface ResearchDeed {
+    id: string
+    deedDate: string | null
+    deedType: string | null
+    description: string | null
+    grantor: string | null
+    grantee: string | null
+    book: string | null
+    volume: string | null
+    page: string | null
+    instrumentNumber: string | null
+    verificationStatus: string
+    source: { name: string | null; url: string | null; citation: string | null } | null
+}
+
 interface AddressDetail {
     address: ResearchAddress
     owners: PropertyOwner[]
     events: ResearchEvent[]
+    deeds: ResearchDeed[]
+    deedLookup: { retrievedAt: string } | null
 }
 
 const router = useRouter()
@@ -287,6 +304,35 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                                     </a>
                                     <p v-else-if="owner.source?.citation || owner.source?.name" class="mt-2 text-xs text-gemini-subtext">{{ owner.source.citation || owner.source.name }}</p>
                                     <p v-if="owner.notes" class="mt-2 text-sm text-gemini-subtext">{{ owner.notes }}</p>
+                                </article>
+                            </div>
+                        </section>
+
+                        <section aria-labelledby="deeds-heading">
+                            <div class="mb-3 flex items-center gap-2">
+                                <Landmark class="h-4 w-4 text-gemini-blue" />
+                                <h3 id="deeds-heading" class="text-sm font-semibold text-gemini-text">Deed history</h3>
+                                <span class="text-xs text-gemini-subtext">{{ detail.deeds.length }}</span>
+                            </div>
+                            <div v-if="!detail.deeds.length" class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
+                                {{ detail.deedLookup ? 'No deeds were returned by TAD.' : 'Deed history has not been retrieved yet.' }}
+                            </div>
+                            <div v-else class="divide-y divide-gemini-border rounded-xl border border-gemini-border">
+                                <article v-for="deed in detail.deeds" :key="deed.id" class="px-4 py-3">
+                                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                                        <h4 class="text-sm font-medium text-gemini-text">{{ deed.description || deed.deedType || 'Deed' }}</h4>
+                                        <span class="text-xs capitalize text-gemini-subtext">{{ deed.verificationStatus }}</span>
+                                    </div>
+                                    <p class="mt-1 text-xs text-gemini-subtext">{{ formatDate(deed.deedDate) }}</p>
+                                    <p class="mt-2 text-sm text-gemini-subtext">Seller: {{ deed.grantor || 'Unknown' }}</p>
+                                    <p class="mt-1 text-sm text-gemini-subtext">Buyer: {{ deed.grantee || 'Unknown' }}</p>
+                                    <p v-if="deed.instrumentNumber || deed.book || deed.volume || deed.page" class="mt-2 text-xs text-gemini-subtext">
+                                        {{ [deed.instrumentNumber && `Instrument ${deed.instrumentNumber}`, deed.book && `Book ${deed.book}`, deed.volume && deed.volume !== deed.book && `Volume ${deed.volume}`, deed.page && `Page ${deed.page}`].filter(Boolean).join(' · ') }}
+                                    </p>
+                                    <a v-if="deed.source?.url" :href="deed.source.url" target="_blank" rel="noopener noreferrer"
+                                        class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gemini-blue hover:underline">
+                                        View TAD source<ArrowUpRight class="h-3 w-3" />
+                                    </a>
                                 </article>
                             </div>
                         </section>

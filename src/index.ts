@@ -16,6 +16,8 @@ import {
     fileTags,
     projects,
     researchAddresses,
+    researchDeeds,
+    researchDeedLookups,
     researchEvents,
     researchPropertyOwners,
     researchSources,
@@ -746,11 +748,16 @@ app.get('/api/research/addresses', async (c) => {
     const addresses = await db.select().from(researchAddresses).orderBy(asc(researchAddresses.address))
     const searchPattern = search ? `%${search}%` : null
 
-    const [matchingOwners, matchingEvents, matchingTypeEvents, ownerCounts, eventCounts] = await Promise.all([
+    const [matchingOwners, matchingDeeds, matchingEvents, matchingTypeEvents, ownerCounts, eventCounts] = await Promise.all([
         searchPattern
             ? db.selectDistinct({ addressId: researchPropertyOwners.addressId })
                 .from(researchPropertyOwners)
                 .where(like(researchPropertyOwners.ownerName, searchPattern))
+            : Promise.resolve([]),
+        searchPattern
+            ? db.selectDistinct({ addressId: researchDeeds.addressId })
+                .from(researchDeeds)
+                .where(or(like(researchDeeds.grantor, searchPattern), like(researchDeeds.grantee, searchPattern)))
             : Promise.resolve([]),
         searchPattern
             ? db.selectDistinct({ addressId: researchEvents.addressId })
@@ -778,6 +785,7 @@ app.get('/api/research/addresses', async (c) => {
     ])
 
     const ownerIds = new Set(matchingOwners.map((row) => row.addressId))
+    const deedIds = new Set(matchingDeeds.map((row) => row.addressId))
     const eventIds = new Set(matchingEvents.map((row) => row.addressId))
     const typeIds = new Set(matchingTypeEvents.map((row) => row.addressId))
     const ownersByAddress = new Map(ownerCounts.map((row) => [row.addressId, Number(row.count)]))
@@ -789,7 +797,7 @@ app.get('/api/research/addresses', async (c) => {
             address.shortAddress,
             address.importedResident1,
             address.importedResident2,
-        ].some((value) => value?.toLowerCase().includes(search)) || ownerIds.has(address.id) || eventIds.has(address.id)
+        ].some((value) => value?.toLowerCase().includes(search)) || ownerIds.has(address.id) || deedIds.has(address.id) || eventIds.has(address.id)
         return addressMatchesSearch && (!eventType || typeIds.has(address.id))
     }).map((address) => ({
         ...address,
@@ -807,7 +815,7 @@ app.get('/api/research/addresses/:id', async (c) => {
         .where(eq(researchAddresses.id, id)).limit(1)
     if (!address) return c.json({ error: 'Research address not found' }, 404)
 
-    const [owners, events] = await Promise.all([
+    const [owners, events, deeds, deedLookups] = await Promise.all([
         db.select({
             id: researchPropertyOwners.id,
             ownerName: researchPropertyOwners.ownerName,
@@ -852,9 +860,32 @@ app.get('/api/research/addresses/:id', async (c) => {
             .leftJoin(researchSources, eq(researchEvents.sourceId, researchSources.id))
             .where(eq(researchEvents.addressId, id))
             .orderBy(desc(researchEvents.eventDate)),
+        db.select({
+            id: researchDeeds.id,
+            deedDate: researchDeeds.deedDate,
+            deedType: researchDeeds.deedType,
+            description: researchDeeds.description,
+            grantor: researchDeeds.grantor,
+            grantee: researchDeeds.grantee,
+            book: researchDeeds.book,
+            volume: researchDeeds.volume,
+            page: researchDeeds.page,
+            instrumentNumber: researchDeeds.instrumentNumber,
+            verificationStatus: researchDeeds.verificationStatus,
+            source: {
+                name: researchSources.name,
+                url: researchSources.url,
+                citation: researchSources.citation,
+            },
+        }).from(researchDeeds)
+            .leftJoin(researchSources, eq(researchDeeds.sourceId, researchSources.id))
+            .where(eq(researchDeeds.addressId, id))
+            .orderBy(desc(researchDeeds.deedDate)),
+        db.select({ retrievedAt: researchDeedLookups.retrievedAt })
+            .from(researchDeedLookups).where(eq(researchDeedLookups.addressId, id)).limit(1),
     ])
 
-    return c.json({ address, owners, events })
+    return c.json({ address, owners, events, deeds, deedLookup: deedLookups[0] ?? null })
 })
 
 // PATCH /api/projects/:id - Update project metadata and rename its backing tag

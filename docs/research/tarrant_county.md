@@ -83,6 +83,22 @@ bun run research:import-tad-year-built --apply
 
 The first command is a dry run. The November 2026 data supplies years for 140 of 141 research addresses: 138 from residential property data and two from main-residence improvement details. The remaining property, 2436 Lofton Terrace, has a residential year of `0` and no matching improvement detail. TAD's year is an appraisal record and should be checked against primary sources when a construction date is important.
 
+## Portal Deed History
+
+The public TAD property page loads a deed-history JSON endpoint using an automatically issued anonymous Tarrant public-session token. Its response includes the deed ID, date, grantor, grantee, type, book, volume, page, and instrument number. This endpoint is not a documented public API, and its rate limits and automation terms have not been verified. Use it in accordance with TAD's current access terms and stop if access is denied or throttled.
+
+```sh
+bun run research:import-tad-deeds
+bun run research:import-tad-deeds --property=2126729 --limit=1 --apply
+bun run research:import-tad-deeds --apply
+```
+
+The first command is a no-network dry run; `--apply` starts the import. The default batch is at most 140 properties, with one request at a time and five seconds between properties. The script uses the existing address-to-parcel extract, stores each property's result atomically, and skips completed properties on later runs, including completed lookups with no results. It stops on HTTP, authentication, rate-limit, timeout, or malformed-response errors; rerun the command to continue from completed properties. The session token is held only in memory.
+
+Deeds are stored as unverified source records, not inferred ownership periods. Placeholder dates such as `1900-12-31` are stored as unknown while retaining the raw portal date. A TAD deed-history row is an index, not a copy of the legal deed; verify important claims against the recorded instrument.
+
+The initial import completed all 141 research properties and stored 601 deed records. Two properties returned no deed records, and 111 deeds have unknown or placeholder dates. Re-running the command skips completed lookups; it does not refresh existing histories.
+
 3. Combining Ownership Data with Newspaper Archives
 Once your local database contains the mapped list of historical owner names and active dates per house, your LLM archive search script can run targeted cross-queries:
 1. Combined Search Queries: Instead of searching newspapers for "2401 Medford", search for "{Owner Name}" AND "Fort Worth" constrained to "{Deed Start Year}" TO "{Deed End Year}".
