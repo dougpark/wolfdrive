@@ -133,6 +133,8 @@ export const researchAddresses = sqliteTable('research_addresses', {
     shortAddress: text('short_address').notNull(),
     importedResident1: text('imported_resident_1'),
     importedResident2: text('imported_resident_2'),
+    actualYearBuilt: integer('actual_year_built'),
+    yearBuiltSourceId: text('year_built_source_id').references(() => researchSources.id, { onDelete: 'set null' }),
     importSource: text('import_source').notNull().default('research_export.csv'),
     importedAt: text('imported_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),

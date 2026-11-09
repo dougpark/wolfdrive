@@ -20,6 +20,8 @@ interface ResearchAddress {
     shortAddress: string
     importedResident1: string | null
     importedResident2: string | null
+    actualYearBuilt: number | null
+    yearBuiltSourceId: string | null
     ownerCount: number
     eventCount: number
 }
@@ -233,6 +235,9 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                     <header class="border-b border-gemini-border px-5 py-5 sm:px-6">
                         <p class="font-mono text-xs text-gemini-subtext">{{ detail.address.shortAddress }}</p>
                         <h2 class="mt-1 text-lg font-semibold tracking-tight text-gemini-text">{{ detail.address.address }}</h2>
+                        <p class="mt-1 text-sm text-gemini-subtext">
+                            Year built: {{ detail.address.actualYearBuilt ?? 'Unknown' }}<template v-if="detail.address.actualYearBuilt && detail.address.yearBuiltSourceId?.startsWith('tad_')"> (TAD)</template>
+                        </p>
                     </header>
 
                     <div class="grid gap-6 p-5 sm:p-6">

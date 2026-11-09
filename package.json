@@ -46,6 +46,7 @@
     "db:scan": "bun run src/scripts/scan.ts",
     "research:import-addresses": "bun run src/scripts/importResearchAddresses.ts",
     "research:extract-tad": "bun run src/scripts/extractTarrantSubdivision.ts",
-    "research:import-tad": "bun run src/scripts/importTarrantOwners.ts"
+    "research:import-tad": "bun run src/scripts/importTarrantOwners.ts",
+    "research:import-tad-year-built": "bun run src/scripts/importTarrantYearBuilt.ts"
   }
 }

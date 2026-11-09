@@ -72,6 +72,17 @@ The importer links records by normalized situs address, imports only matched row
 
 For the current export, the preview reports 135 certified owner records matched to 135 addresses, six addresses represented only by supplemental rows, and seven supplemental rows total (one is outside the research address list). Supplemental rows are not imported. Review their action and select the valid current record before adding them. Six certified rows have no usable deed date; invalid `1900` placeholders are stored as null.
 
+## Year Built
+
+The residential `PropertyData(Delimited)_R.txt` has a `Year_Built` field. The importer matches its account number and situs address against the extracted subdivision records and requires the same appraisal year. For properties missing a usable residential year, it uses `yr_built` from the fixed-width improvement-detail export only when the property has one main-residence improvement and one valid, consistent year. Conflicting or missing years remain unknown, and existing values from other sources are not overwritten. Source citations are stored separately for each file.
+
+```sh
+bun run research:import-tad-year-built
+bun run research:import-tad-year-built --apply
+```
+
+The first command is a dry run. The November 2026 data supplies years for 140 of 141 research addresses: 138 from residential property data and two from main-residence improvement details. The remaining property, 2436 Lofton Terrace, has a residential year of `0` and no matching improvement detail. TAD's year is an appraisal record and should be checked against primary sources when a construction date is important.
+
 3. Combining Ownership Data with Newspaper Archives
 Once your local database contains the mapped list of historical owner names and active dates per house, your LLM archive search script can run targeted cross-queries:
 1. Combined Search Queries: Instead of searching newspapers for "2401 Medford", search for "{Owner Name}" AND "Fort Worth" constrained to "{Deed Start Year}" TO "{Deed End Year}".
