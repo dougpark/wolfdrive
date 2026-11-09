@@ -18,6 +18,7 @@ const KEEP_ALIVE_VIEWS = [
   'TvShowsView',
   'GamesView',
   'SoftwareView',
+  'ResearchView',
 ]
 
 onMounted(() => {

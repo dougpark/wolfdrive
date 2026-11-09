@@ -3,6 +3,11 @@ node_modules
 
 ._.DS_Store
 
+# input data
+data 
+*.csv
+*.json
+
 # output
 out
 dist

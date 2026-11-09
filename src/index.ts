@@ -11,7 +11,15 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
-import { tags, fileTags, projects } from './db/schema'
+import {
+    tags,
+    fileTags,
+    projects,
+    researchAddresses,
+    researchEvents,
+    researchPropertyOwners,
+    researchSources,
+} from './db/schema'
 import {
     CUSTOM_ONLY_LIBRARY_IDS,
     LIBRARY_CATEGORY_MIME_MAP,
@@ -729,6 +737,119 @@ app.post('/api/projects', async (c) => {
 app.get('/api/projects/:id', async (c) => {
     const project = await findProject(c.req.param('id'), c.get('userId'))
     return project ? c.json(project) : c.json({ error: 'Project not found' }, 404)
+})
+
+// GET /api/research/addresses - Search imported properties and return research counts.
+app.get('/api/research/addresses', async (c) => {
+    const search = c.req.query('search')?.trim().toLowerCase()
+    const eventType = c.req.query('eventType')?.trim()
+    const addresses = await db.select().from(researchAddresses).orderBy(asc(researchAddresses.address))
+    const searchPattern = search ? `%${search}%` : null
+
+    const [matchingOwners, matchingEvents, matchingTypeEvents, ownerCounts, eventCounts] = await Promise.all([
+        searchPattern
+            ? db.selectDistinct({ addressId: researchPropertyOwners.addressId })
+                .from(researchPropertyOwners)
+                .where(like(researchPropertyOwners.ownerName, searchPattern))
+            : Promise.resolve([]),
+        searchPattern
+            ? db.selectDistinct({ addressId: researchEvents.addressId })
+                .from(researchEvents)
+                .where(or(
+                    like(researchEvents.eventType, searchPattern),
+                    like(researchEvents.title, searchPattern),
+                    like(researchEvents.summary, searchPattern),
+                    like(researchEvents.excerpt, searchPattern),
+                ))
+            : Promise.resolve([]),
+        eventType
+            ? db.selectDistinct({ addressId: researchEvents.addressId })
+                .from(researchEvents)
+                .where(eq(researchEvents.eventType, eventType))
+            : Promise.resolve([]),
+        db.select({
+            addressId: researchPropertyOwners.addressId,
+            count: sql<number>`count(*)`,
+        }).from(researchPropertyOwners).groupBy(researchPropertyOwners.addressId),
+        db.select({
+            addressId: researchEvents.addressId,
+            count: sql<number>`count(*)`,
+        }).from(researchEvents).groupBy(researchEvents.addressId),
+    ])
+
+    const ownerIds = new Set(matchingOwners.map((row) => row.addressId))
+    const eventIds = new Set(matchingEvents.map((row) => row.addressId))
+    const typeIds = new Set(matchingTypeEvents.map((row) => row.addressId))
+    const ownersByAddress = new Map(ownerCounts.map((row) => [row.addressId, Number(row.count)]))
+    const eventsByAddress = new Map(eventCounts.map((row) => [row.addressId, Number(row.count)]))
+
+    const results = addresses.filter((address) => {
+        const addressMatchesSearch = !search || [
+            address.address,
+            address.shortAddress,
+            address.importedResident1,
+            address.importedResident2,
+        ].some((value) => value?.toLowerCase().includes(search)) || ownerIds.has(address.id) || eventIds.has(address.id)
+        return addressMatchesSearch && (!eventType || typeIds.has(address.id))
+    }).map((address) => ({
+        ...address,
+        ownerCount: ownersByAddress.get(address.id) ?? 0,
+        eventCount: eventsByAddress.get(address.id) ?? 0,
+    }))
+
+    return c.json(results)
+})
+
+// GET /api/research/addresses/:id - Fetch sourced ownership claims and research events.
+app.get('/api/research/addresses/:id', async (c) => {
+    const id = c.req.param('id')
+    const [address] = await db.select().from(researchAddresses)
+        .where(eq(researchAddresses.id, id)).limit(1)
+    if (!address) return c.json({ error: 'Research address not found' }, 404)
+
+    const [owners, events] = await Promise.all([
+        db.select({
+            id: researchPropertyOwners.id,
+            ownerName: researchPropertyOwners.ownerName,
+            startDate: researchPropertyOwners.startDate,
+            endDate: researchPropertyOwners.endDate,
+            parcelId: researchPropertyOwners.parcelId,
+            deedReference: researchPropertyOwners.deedReference,
+            verificationStatus: researchPropertyOwners.verificationStatus,
+            notes: researchPropertyOwners.notes,
+            source: {
+                id: researchSources.id,
+                name: researchSources.name,
+                sourceType: researchSources.sourceType,
+                url: researchSources.url,
+                citation: researchSources.citation,
+            },
+        }).from(researchPropertyOwners)
+            .leftJoin(researchSources, eq(researchPropertyOwners.sourceId, researchSources.id))
+            .where(eq(researchPropertyOwners.addressId, id))
+            .orderBy(asc(researchPropertyOwners.startDate)),
+        db.select({
+            id: researchEvents.id,
+            eventDate: researchEvents.eventDate,
+            eventType: researchEvents.eventType,
+            title: researchEvents.title,
+            summary: researchEvents.summary,
+            excerpt: researchEvents.excerpt,
+            verificationStatus: researchEvents.verificationStatus,
+            source: {
+                id: researchSources.id,
+                name: researchSources.name,
+                sourceType: researchSources.sourceType,
+                url: researchSources.url,
+                citation: researchSources.citation,
+            },
+        }).from(researchEvents)
+            .leftJoin(researchSources, eq(researchEvents.sourceId, researchSources.id))
+            .where(eq(researchEvents.addressId, id))
+            .orderBy(desc(researchEvents.eventDate)),
+    ])
+
+    return c.json({ address, owners, events })
 })
 
 // PATCH /api/projects/:id - Update project metadata and rename its backing tag

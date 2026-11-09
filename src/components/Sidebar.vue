@@ -20,6 +20,7 @@ import {
     User,
     Shield,
     Briefcase,
+    Landmark,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -69,16 +70,16 @@ const categories = [
 </script>
 
 <template>
-    <aside class="bg-gemini-card p-4 flex flex-col gap-6">
+    <aside class="flex flex-col gap-3 overflow-y-auto bg-gemini-card p-2 md:gap-6 md:p-4">
         <!-- Logo / Brand -->
-        <div class="flex items-center justify-between gap-3 px-3 py-2">
+        <div class="flex flex-col items-center gap-2 px-1 py-2 md:flex-row md:justify-between md:gap-3 md:px-3">
             <div class="flex items-center gap-3">
                 <img :src="logoSrc" alt="WolfDrive" class="h-8 w-8 object-contain" />
-                <span class="font-semibold text-lg tracking-tight">WolfDrive</span>
+                <span class="hidden text-lg font-semibold tracking-tight md:block">WolfDrive</span>
             </div>
 
             <!-- Settings Dropdown Container -->
-            <div class="flex items-center gap-1">
+            <div class="flex flex-col items-center gap-1 md:flex-row">
                 <button type="button" @click="toggleAiPanel()"
                     class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-gemini-subtext transition-colors hover:bg-gemini-surface hover:text-gemini-blue focus:outline-none focus:ring-2 focus:ring-gemini-blue"
                     :class="{ 'bg-gemini-surface text-gemini-blue': isAiPanelOpen }" aria-label="Open local AI chat"
@@ -140,36 +141,47 @@ const categories = [
 
         <!-- Category Nav Links -->
         <nav class="flex flex-col gap-1">
-            <RouterLink to="/projects"
-                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="[
+            <RouterLink to="/projects" aria-label="Projects" title="Projects"
+                class="flex items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors md:justify-start md:px-3.5" :class="[
                     route.path.startsWith('/projects')
                         ? 'bg-gemini-blue/10 text-gemini-blue font-semibold'
                         : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'
                 ]">
                 <Briefcase class="h-4 w-4 shrink-0" />
-                <span>Projects</span>
+                <span class="hidden md:inline">Projects</span>
+            </RouterLink>
+
+            <RouterLink to="/research" aria-label="Research" title="Research"
+                class="flex items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors md:justify-start md:px-3.5" :class="[
+                    route.path.startsWith('/research')
+                        ? 'bg-gemini-blue/10 text-gemini-blue font-semibold'
+                        : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'
+                ]">
+                <Landmark class="h-4 w-4 shrink-0" />
+                <span class="hidden md:inline">Research</span>
             </RouterLink>
 
             <RouterLink v-for="cat in categories" :key="cat.path" :to="cat.path"
-                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="[
+                :aria-label="cat.name" :title="cat.name"
+                class="flex items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors md:justify-start md:px-3.5" :class="[
                     route.path.startsWith(cat.path)
                         ? 'bg-gemini-blue/10 text-gemini-blue font-semibold'
                         : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'
                 ]">
                 <component :is="cat.icon" class="h-4 w-4 shrink-0" />
-                <span>{{ cat.name }}</span>
+                <span class="hidden md:inline">{{ cat.name }}</span>
             </RouterLink>
 
             <hr class="my-1 border-gemini-border" />
 
-            <RouterLink to="/tags"
-                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="[
+            <RouterLink to="/tags" aria-label="Manage Tags" title="Manage Tags"
+                class="flex items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors md:justify-start md:px-3.5" :class="[
                     route.path.startsWith('/tags')
                         ? 'bg-gemini-blue/10 text-gemini-blue font-semibold'
                         : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'
                 ]">
                 <Tag class="h-4 w-4 shrink-0" />
-                <span>Manage Tags</span>
+                <span class="hidden md:inline">Manage Tags</span>
             </RouterLink>
         </nav>
     </aside>

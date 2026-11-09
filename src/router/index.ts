@@ -17,6 +17,7 @@ import TagsView from '../views/TagsView.vue'
 import ProjectsView from '../views/ProjectsView.vue'
 import ProjectView from '../views/ProjectView.vue'
 import MusicPlayerView from '../views/MusicPlayerView.vue'
+import ResearchView from '../views/ResearchView.vue'
 
 export const router = createRouter({
     history: createWebHistory(),
@@ -40,5 +41,6 @@ export const router = createRouter({
         { path: '/tags', component: TagsView },
         { path: '/projects', component: ProjectsView },
         { path: '/projects/:id', component: ProjectView },
+        { path: '/research/:id?', component: ResearchView },
     ],
 })

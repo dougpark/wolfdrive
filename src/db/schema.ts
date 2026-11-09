@@ -126,6 +126,71 @@ export const readingState = sqliteTable('reading_state', {
     uniqueIndex('reading_state_user_file_idx').on(table.userId, table.fileId),
 ])
 
+// Research targets are imported independently of later claims and source records.
+export const researchAddresses = sqliteTable('research_addresses', {
+    id: text('id').primaryKey(),
+    address: text('address').notNull(),
+    shortAddress: text('short_address').notNull(),
+    importedResident1: text('imported_resident_1'),
+    importedResident2: text('imported_resident_2'),
+    importSource: text('import_source').notNull().default('research_export.csv'),
+    importedAt: text('imported_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    uniqueIndex('research_addresses_short_address_idx').on(table.shortAddress),
+    index('research_addresses_address_idx').on(table.address),
+])
+
+// Sources retain citation details so later OCR, owner, and event claims stay traceable.
+export const researchSources = sqliteTable('research_sources', {
+    id: text('id').primaryKey(),
+    sourceType: text('source_type').notNull(),
+    name: text('name').notNull(),
+    url: text('url'),
+    citation: text('citation'),
+    externalId: text('external_id'),
+    retrievedAt: text('retrieved_at'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    index('research_sources_type_idx').on(table.sourceType),
+])
+
+export const researchPropertyOwners = sqliteTable('research_property_owners', {
+    id: text('id').primaryKey(),
+    addressId: text('address_id').notNull().references(() => researchAddresses.id, { onDelete: 'cascade' }),
+    sourceId: text('source_id').references(() => researchSources.id, { onDelete: 'set null' }),
+    ownerName: text('owner_name').notNull(),
+    startDate: text('start_date'),
+    endDate: text('end_date'),
+    parcelId: text('parcel_id'),
+    deedReference: text('deed_reference'),
+    verificationStatus: text('verification_status').notNull().default('unverified'),
+    notes: text('notes'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    index('research_property_owners_address_idx').on(table.addressId),
+    index('research_property_owners_name_idx').on(table.ownerName),
+])
+
+export const researchEvents = sqliteTable('research_events', {
+    id: text('id').primaryKey(),
+    addressId: text('address_id').notNull().references(() => researchAddresses.id, { onDelete: 'cascade' }),
+    sourceId: text('source_id').references(() => researchSources.id, { onDelete: 'set null' }),
+    eventDate: text('event_date'),
+    eventType: text('event_type').notNull().default('general'),
+    title: text('title'),
+    summary: text('summary'),
+    excerpt: text('excerpt'),
+    rawText: text('raw_text'),
+    verificationStatus: text('verification_status').notNull().default('unverified'),
+    extractionData: text('extraction_data', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+    index('research_events_address_idx').on(table.addressId),
+    index('research_events_type_idx').on(table.eventType),
+    index('research_events_date_idx').on(table.eventDate),
+])
+
 // 3. Example: User-bound eBook Progress
 // export const ebookProgress = sqliteTable('ebook_progress', {
 //     id: text('id').primaryKey(),
