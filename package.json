@@ -44,6 +44,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "bun run src/db/seed.ts",
     "db:scan": "bun run src/scripts/scan.ts",
-    "research:import-addresses": "bun run src/scripts/importResearchAddresses.ts"
+    "research:import-addresses": "bun run src/scripts/importResearchAddresses.ts",
+    "research:extract-tad": "bun run src/scripts/extractTarrantSubdivision.ts",
+    "research:import-tad": "bun run src/scripts/importTarrantOwners.ts"
   }
 }

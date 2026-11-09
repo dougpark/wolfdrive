@@ -37,8 +37,13 @@ interface PropertyOwner {
     ownerName: string
     startDate: string | null
     endDate: string | null
+    recordedDeedDate: string | null
     parcelId: string | null
     deedReference: string | null
+    appraisalYear: number | null
+    supplementNumber: number | null
+    supplementAction: string | null
+    legalDescription: string | null
     verificationStatus: string
     notes: string | null
     source: ResearchSource
@@ -259,10 +264,18 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                                         <h4 class="text-sm font-medium text-gemini-text">{{ owner.ownerName }}</h4>
                                         <span class="text-xs capitalize text-gemini-subtext">{{ owner.verificationStatus }}</span>
                                     </div>
-                                    <p class="mt-1 text-xs text-gemini-subtext">{{ formatDate(owner.startDate) }} – {{ owner.endDate ? formatDate(owner.endDate) : 'End date unknown' }}</p>
+                                    <p v-if="owner.startDate || owner.endDate" class="mt-1 text-xs text-gemini-subtext">
+                                        {{ owner.startDate ? formatDate(owner.startDate) : 'Start date unknown' }} – {{ owner.endDate ? formatDate(owner.endDate) : 'End date unknown' }}
+                                    </p>
+                                    <p v-else class="mt-1 text-xs text-gemini-subtext">Ownership period not established by this source.</p>
+                                    <p v-if="owner.recordedDeedDate" class="mt-1 text-xs text-gemini-subtext">TAD deed date: {{ formatDate(owner.recordedDeedDate) }}</p>
+                                    <p v-if="owner.appraisalYear" class="mt-1 text-xs text-gemini-subtext">
+                                        {{ owner.supplementNumber ? `Supplement ${owner.supplementNumber}` : 'Certified appraisal roll' }} · {{ owner.appraisalYear }}
+                                    </p>
                                     <p v-if="owner.parcelId || owner.deedReference" class="mt-1 text-xs text-gemini-subtext">
                                         {{ [owner.parcelId && `Parcel ${owner.parcelId}`, owner.deedReference && `Deed ${owner.deedReference}`].filter(Boolean).join(' · ') }}
                                     </p>
+                                    <p v-if="owner.legalDescription" class="mt-2 text-sm text-gemini-subtext">{{ owner.legalDescription }}</p>
                                     <a v-if="owner.source?.url" :href="owner.source.url" target="_blank" rel="noopener noreferrer"
                                         class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gemini-blue hover:underline">
                                         {{ owner.source.name || owner.source.citation || 'View source' }}<ArrowUpRight class="h-3 w-3" />

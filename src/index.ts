@@ -813,8 +813,13 @@ app.get('/api/research/addresses/:id', async (c) => {
             ownerName: researchPropertyOwners.ownerName,
             startDate: researchPropertyOwners.startDate,
             endDate: researchPropertyOwners.endDate,
+            recordedDeedDate: researchPropertyOwners.recordedDeedDate,
             parcelId: researchPropertyOwners.parcelId,
             deedReference: researchPropertyOwners.deedReference,
+            appraisalYear: researchPropertyOwners.appraisalYear,
+            supplementNumber: researchPropertyOwners.supplementNumber,
+            supplementAction: researchPropertyOwners.supplementAction,
+            legalDescription: researchPropertyOwners.legalDescription,
             verificationStatus: researchPropertyOwners.verificationStatus,
             notes: researchPropertyOwners.notes,
             source: {
