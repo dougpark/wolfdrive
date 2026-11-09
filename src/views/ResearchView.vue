@@ -182,7 +182,8 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
 
         <section class="mb-4 flex flex-col gap-3 sm:flex-row">
             <label class="relative min-w-0 flex-1">
-                <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gemini-subtext" />
+                <Search
+                    class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gemini-subtext" />
                 <BaseInput v-model="search" type="search" placeholder="Search address, resident, or event"
                     aria-label="Search research addresses, residents, or events" class="pl-10 pr-10" />
                 <BaseButton v-if="search" type="button" aria-label="Clear search" title="Clear search"
@@ -218,15 +219,18 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                     <p class="mt-1 text-xs text-gemini-subtext">Try another address or resident name.</p>
                 </div>
                 <nav v-else class="max-h-[calc(65vh-49px)] overflow-y-auto" aria-label="Research properties">
-                    <RouterLink v-for="address in addresses" :key="address.id" :to="`/research/${encodeURIComponent(address.id)}`"
+                    <RouterLink v-for="address in addresses" :key="address.id"
+                        :to="`/research/${encodeURIComponent(address.id)}`"
                         class="block border-b border-gemini-border px-4 py-3 last:border-0 hover:bg-gemini-surface"
                         :class="selectedId === address.id ? 'bg-gemini-surface' : ''">
                         <span class="flex min-w-0 items-center justify-between gap-3">
                             <span class="truncate text-sm font-medium text-gemini-text">{{ address.address }}</span>
-                            <span class="shrink-0 font-mono text-[11px] text-gemini-subtext">{{ address.shortAddress }}</span>
+                            <span class="shrink-0 font-mono text-[11px] text-gemini-subtext">{{ address.shortAddress
+                                }}</span>
                         </span>
                         <span class="mt-1 block truncate text-xs text-gemini-subtext">
-                            {{ [address.importedResident1, address.importedResident2].filter(Boolean).join(' · ') || 'No imported names' }}
+                            {{ [address.importedResident1, address.importedResident2].filter(Boolean).join(' · ') || 'No
+                            imported names' }}
                         </span>
                         <span class="mt-2 flex gap-3 text-[11px] text-gemini-subtext">
                             <span>{{ address.ownerCount }} ownership records</span>
@@ -243,17 +247,22 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                     <div class="h-32 animate-pulse rounded-xl bg-gemini-surface" />
                 </div>
                 <div v-else-if="detailError" class="p-8 text-sm text-gemini-subtext">{{ detailError }}</div>
-                <div v-else-if="!detail || !selectedAddress" class="flex min-h-72 flex-col items-center justify-center p-8 text-center">
+                <div v-else-if="!detail || !selectedAddress"
+                    class="flex min-h-72 flex-col items-center justify-center p-8 text-center">
                     <Building2 class="mb-3 h-8 w-8 text-gemini-subtext" />
                     <h2 class="text-base font-semibold text-gemini-text">Select a property</h2>
-                    <p class="mt-1 max-w-sm text-sm text-gemini-subtext">Address research and cited records will appear here.</p>
+                    <p class="mt-1 max-w-sm text-sm text-gemini-subtext">Address research and cited records will appear
+                        here.</p>
                 </div>
                 <template v-else>
                     <header class="border-b border-gemini-border px-5 py-5 sm:px-6">
                         <p class="font-mono text-xs text-gemini-subtext">{{ detail.address.shortAddress }}</p>
-                        <h2 class="mt-1 text-lg font-semibold tracking-tight text-gemini-text">{{ detail.address.address }}</h2>
+                        <h2 class="mt-1 text-lg font-semibold tracking-tight text-gemini-text">{{ detail.address.address
+                            }}</h2>
                         <p class="mt-1 text-sm text-gemini-subtext">
-                            Year built: {{ detail.address.actualYearBuilt ?? 'Unknown' }}<template v-if="detail.address.actualYearBuilt && detail.address.yearBuiltSourceId?.startsWith('tad_')"> (TAD)</template>
+                            Year built: {{ detail.address.actualYearBuilt ?? 'Unknown' }}<template
+                                v-if="detail.address.actualYearBuilt && detail.address.yearBuiltSourceId?.startsWith('tad_')">
+                                (TAD)</template>
                         </p>
                     </header>
 
@@ -261,48 +270,72 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                         <section aria-labelledby="imported-names-heading">
                             <div class="mb-3 flex items-center gap-2">
                                 <Users class="h-4 w-4 text-gemini-blue" />
-                                <h3 id="imported-names-heading" class="text-sm font-semibold text-gemini-text">Names from address export</h3>
+                                <h3 id="imported-names-heading" class="text-sm font-semibold text-gemini-text">Names
+                                    from address export
+                                </h3>
                                 <span class="text-xs text-gemini-subtext">Unverified</span>
                             </div>
-                            <p v-if="!detail.address.importedResident1 && !detail.address.importedResident2" class="text-sm text-gemini-subtext">No names were included in the CSV.</p>
+                            <p v-if="!detail.address.importedResident1 && !detail.address.importedResident2"
+                                class="text-sm text-gemini-subtext">No names were included in the CSV.</p>
                             <div v-else class="flex flex-wrap gap-2">
-                                <span v-for="name in [detail.address.importedResident1, detail.address.importedResident2].filter((value): value is string => Boolean(value))"
-                                    :key="name" class="rounded-lg bg-gemini-surface px-3 py-1.5 text-sm text-gemini-text">{{ name }}</span>
+                                <span
+                                    v-for="name in [detail.address.importedResident1, detail.address.importedResident2].filter((value): value is string => Boolean(value))"
+                                    :key="name"
+                                    class="rounded-lg bg-gemini-surface px-3 py-1.5 text-sm text-gemini-text">{{ name
+                                    }}</span>
                             </div>
                         </section>
 
                         <section aria-labelledby="ownership-heading">
                             <div class="mb-3 flex items-center gap-2">
                                 <Landmark class="h-4 w-4 text-gemini-blue" />
-                                <h3 id="ownership-heading" class="text-sm font-semibold text-gemini-text">Tarrant County ownership</h3>
+                                <h3 id="ownership-heading" class="text-sm font-semibold text-gemini-text">Tarrant County
+                                    ownership</h3>
                                 <span class="text-xs text-gemini-subtext">{{ detail.owners.length }}</span>
                             </div>
-                            <div v-if="!detail.owners.length" class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
+                            <div v-if="!detail.owners.length"
+                                class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
                                 No sourced ownership records have been imported for this property.
                             </div>
                             <div v-else class="divide-y divide-gemini-border rounded-xl border border-gemini-border">
                                 <article v-for="owner in detail.owners" :key="owner.id" class="px-4 py-3">
                                     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                                         <h4 class="text-sm font-medium text-gemini-text">{{ owner.ownerName }}</h4>
-                                        <span class="text-xs capitalize text-gemini-subtext">{{ owner.verificationStatus }}</span>
+                                        <span class="text-xs capitalize text-gemini-subtext">{{ owner.verificationStatus
+                                            }}</span>
                                     </div>
                                     <p v-if="owner.startDate || owner.endDate" class="mt-1 text-xs text-gemini-subtext">
-                                        {{ owner.startDate ? formatDate(owner.startDate) : 'Start date unknown' }} – {{ owner.endDate ? formatDate(owner.endDate) : 'End date unknown' }}
+                                        {{ owner.startDate ? formatDate(owner.startDate) : 'Start date unknown' }} – {{
+                                            owner.endDate ?
+                                        formatDate(owner.endDate) : 'End date unknown' }}
                                     </p>
-                                    <p v-else class="mt-1 text-xs text-gemini-subtext">Ownership period not established by this source.</p>
-                                    <p v-if="owner.recordedDeedDate" class="mt-1 text-xs text-gemini-subtext">TAD deed date: {{ formatDate(owner.recordedDeedDate) }}</p>
+                                    <p v-else class="mt-1 text-xs text-gemini-subtext">Ownership period not established
+                                        by this source.</p>
+                                    <p v-if="owner.recordedDeedDate" class="mt-1 text-xs text-gemini-subtext">TAD deed
+                                        date: {{
+                                        formatDate(owner.recordedDeedDate) }}</p>
                                     <p v-if="owner.appraisalYear" class="mt-1 text-xs text-gemini-subtext">
-                                        {{ owner.supplementNumber ? `Supplement ${owner.supplementNumber}` : 'Certified appraisal roll' }} · {{ owner.appraisalYear }}
+                                        {{ owner.supplementNumber ? `Supplement ${owner.supplementNumber}` : 'Certified
+                                        appraisal roll' }} ·
+                                        {{ owner.appraisalYear }}
                                     </p>
-                                    <p v-if="owner.parcelId || owner.deedReference" class="mt-1 text-xs text-gemini-subtext">
-                                        {{ [owner.parcelId && `Parcel ${owner.parcelId}`, owner.deedReference && `Deed ${owner.deedReference}`].filter(Boolean).join(' · ') }}
+                                    <p v-if="owner.parcelId || owner.deedReference"
+                                        class="mt-1 text-xs text-gemini-subtext">
+                                        {{ [owner.parcelId && `Parcel ${owner.parcelId}`, owner.deedReference && `Deed
+                                        ${owner.deedReference}`].filter(Boolean).join(' · ') }}
                                     </p>
-                                    <p v-if="owner.legalDescription" class="mt-2 text-sm text-gemini-subtext">{{ owner.legalDescription }}</p>
-                                    <a v-if="owner.source?.url" :href="owner.source.url" target="_blank" rel="noopener noreferrer"
+                                    <p v-if="owner.legalDescription" class="mt-2 text-sm text-gemini-subtext">{{
+                                        owner.legalDescription }}
+                                    </p>
+                                    <a v-if="owner.source?.url" :href="owner.source.url" target="_blank"
+                                        rel="noopener noreferrer"
                                         class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gemini-blue hover:underline">
-                                        {{ owner.source.name || owner.source.citation || 'View source' }}<ArrowUpRight class="h-3 w-3" />
+                                        {{ owner.source.name || owner.source.citation || 'View source' }}
+                                        <ArrowUpRight class="h-3 w-3" />
                                     </a>
-                                    <p v-else-if="owner.source?.citation || owner.source?.name" class="mt-2 text-xs text-gemini-subtext">{{ owner.source.citation || owner.source.name }}</p>
+                                    <p v-else-if="owner.source?.citation || owner.source?.name"
+                                        class="mt-2 text-xs text-gemini-subtext">{{
+                                            owner.source.citation || owner.source.name }}</p>
                                     <p v-if="owner.notes" class="mt-2 text-sm text-gemini-subtext">{{ owner.notes }}</p>
                                 </article>
                             </div>
@@ -314,24 +347,38 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                                 <h3 id="deeds-heading" class="text-sm font-semibold text-gemini-text">Deed history</h3>
                                 <span class="text-xs text-gemini-subtext">{{ detail.deeds.length }}</span>
                             </div>
-                            <div v-if="!detail.deeds.length" class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
-                                {{ detail.deedLookup ? 'No deeds were returned by TAD.' : 'Deed history has not been retrieved yet.' }}
+                            <div v-if="!detail.deeds.length"
+                                class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
+                                {{ detail.deedLookup ? 'No deeds were returned by TAD.' : 'Deed history has not been
+                                retrieved yet.' }}
                             </div>
                             <div v-else class="divide-y divide-gemini-border rounded-xl border border-gemini-border">
                                 <article v-for="deed in detail.deeds" :key="deed.id" class="px-4 py-3">
                                     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                                        <h4 class="text-sm font-medium text-gemini-text">{{ deed.description || deed.deedType || 'Deed' }}</h4>
-                                        <span class="text-xs capitalize text-gemini-subtext">{{ deed.verificationStatus }}</span>
+                                        <h4 class="text-sm font-medium text-gemini-text">{{ deed.description ||
+                                            deed.deedType || 'Deed' }}
+                                        </h4>
+                                        <span class="text-xs capitalize text-gemini-subtext">{{ deed.verificationStatus
+                                            }}</span>
                                     </div>
                                     <p class="mt-1 text-xs text-gemini-subtext">{{ formatDate(deed.deedDate) }}</p>
-                                    <p class="mt-2 text-sm text-gemini-subtext">Seller: {{ deed.grantor || 'Unknown' }}</p>
-                                    <p class="mt-1 text-sm text-gemini-subtext">Buyer: {{ deed.grantee || 'Unknown' }}</p>
-                                    <p v-if="deed.instrumentNumber || deed.book || deed.volume || deed.page" class="mt-2 text-xs text-gemini-subtext">
-                                        {{ [deed.instrumentNumber && `Instrument ${deed.instrumentNumber}`, deed.book && `Book ${deed.book}`, deed.volume && deed.volume !== deed.book && `Volume ${deed.volume}`, deed.page && `Page ${deed.page}`].filter(Boolean).join(' · ') }}
+                                    <p class="mt-2 text-sm text-gemini-subtext">Seller: {{ deed.grantor || 'Unknown' }}
                                     </p>
-                                    <a v-if="deed.source?.url" :href="deed.source.url" target="_blank" rel="noopener noreferrer"
+                                    <p class="mt-1 text-sm text-gemini-subtext">Buyer: {{ deed.grantee || 'Unknown' }}
+                                    </p>
+                                    <p v-if="deed.instrumentNumber || deed.book || deed.volume || deed.page"
+                                        class="mt-2 text-xs text-gemini-subtext">
+                                        {{ [deed.instrumentNumber && `Instrument ${deed.instrumentNumber}`, deed.book &&
+                                            `Book
+                                        ${deed.book}`, deed.volume && deed.volume !== deed.book && `Volume
+                                        ${deed.volume}`, deed.page &&
+                                        `Page ${deed.page}`].filter(Boolean).join(' · ') }}
+                                    </p>
+                                    <a v-if="deed.source?.url" :href="deed.source.url" target="_blank"
+                                        rel="noopener noreferrer"
                                         class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gemini-blue hover:underline">
-                                        View TAD source<ArrowUpRight class="h-3 w-3" />
+                                        View TAD source
+                                        <ArrowUpRight class="h-3 w-3" />
                                     </a>
                                 </article>
                             </div>
@@ -340,28 +387,42 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                         <section aria-labelledby="mentions-heading">
                             <div class="mb-3 flex items-center gap-2">
                                 <Newspaper class="h-4 w-4 text-gemini-blue" />
-                                <h3 id="mentions-heading" class="text-sm font-semibold text-gemini-text">Historical mentions</h3>
+                                <h3 id="mentions-heading" class="text-sm font-semibold text-gemini-text">Historical
+                                    mentions</h3>
                                 <span class="text-xs text-gemini-subtext">{{ detail.events.length }}</span>
                             </div>
-                            <div v-if="!detail.events.length" class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
+                            <div v-if="!detail.events.length"
+                                class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
                                 No newspaper or historical events have been added yet.
                             </div>
                             <div v-else class="divide-y divide-gemini-border rounded-xl border border-gemini-border">
                                 <article v-for="event in detail.events" :key="event.id" class="px-4 py-3">
                                     <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <h4 class="text-sm font-medium text-gemini-text">{{ event.title || formatEventType(event.eventType) }}</h4>
-                                        <span class="text-xs capitalize text-gemini-subtext">{{ event.verificationStatus }}</span>
+                                        <h4 class="text-sm font-medium text-gemini-text">{{ event.title ||
+                                            formatEventType(event.eventType)
+                                            }}</h4>
+                                        <span class="text-xs capitalize text-gemini-subtext">{{ event.verificationStatus
+                                            }}</span>
                                     </div>
                                     <p class="mt-1 flex items-center gap-1 text-xs capitalize text-gemini-subtext">
-                                        <Clock3 class="h-3 w-3" />{{ formatDate(event.eventDate) }} · {{ formatEventType(event.eventType) }}
+                                        <Clock3 class="h-3 w-3" />{{ formatDate(event.eventDate) }} · {{
+                                        formatEventType(event.eventType) }}
                                     </p>
-                                    <p v-if="event.summary" class="mt-2 text-sm leading-relaxed text-gemini-subtext">{{ event.summary }}</p>
-                                    <blockquote v-if="event.excerpt" class="mt-2 border-l-2 border-gemini-border pl-3 text-sm text-gemini-subtext">{{ event.excerpt }}</blockquote>
-                                    <a v-if="event.source?.url" :href="event.source.url" target="_blank" rel="noopener noreferrer"
+                                    <p v-if="event.summary" class="mt-2 text-sm leading-relaxed text-gemini-subtext">{{
+                                        event.summary }}</p>
+                                    <blockquote v-if="event.excerpt"
+                                        class="mt-2 border-l-2 border-gemini-border pl-3 text-sm text-gemini-subtext">{{
+                                        event.excerpt }}
+                                    </blockquote>
+                                    <a v-if="event.source?.url" :href="event.source.url" target="_blank"
+                                        rel="noopener noreferrer"
                                         class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gemini-blue hover:underline">
-                                        {{ event.source.name || event.source.citation || 'View source' }}<ArrowUpRight class="h-3 w-3" />
+                                        {{ event.source.name || event.source.citation || 'View source' }}
+                                        <ArrowUpRight class="h-3 w-3" />
                                     </a>
-                                    <p v-else-if="event.source?.citation || event.source?.name" class="mt-2 text-xs text-gemini-subtext">{{ event.source.citation || event.source.name }}</p>
+                                    <p v-else-if="event.source?.citation || event.source?.name"
+                                        class="mt-2 text-xs text-gemini-subtext">{{
+                                            event.source.citation || event.source.name }}</p>
                                 </article>
                             </div>
                         </section>
