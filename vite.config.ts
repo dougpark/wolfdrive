@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type UserConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
 
-export default defineConfig({
+export default defineConfig(({ mode }): UserConfig => ({
     plugins: [
         vue(),
         tailwindcss(),
@@ -14,6 +14,18 @@ export default defineConfig({
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url))
         }
+    },
+
+    build: {
+        emptyOutDir: mode !== 'passwords',
+        rolldownOptions: {
+            input: mode === 'passwords'
+                ? { passwords: fileURLToPath(new URL('./passwords/index.html', import.meta.url)) }
+                : {
+                    app: fileURLToPath(new URL('./index.html', import.meta.url)),
+                    passwords: fileURLToPath(new URL('./passwords/index.html', import.meta.url)),
+                },
+        },
     },
 
     server: {
@@ -35,4 +47,4 @@ export default defineConfig({
             },
         },
     },
-})
+}))
