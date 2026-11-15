@@ -20,6 +20,11 @@ const chart = computed(() => {
         label: card.label,
         seconds: Number(card.model.total) / (2 * rate.value),
     }))
+    entries.push({
+        id: 0,
+        label: 'Illustrative API token (256 random bits / 64 hex characters)',
+        seconds: Number(2n ** 256n) / (2 * rate.value),
+    })
     const maximumLog = Math.max(1, ...entries.map(entry => Math.log10(Math.max(1, entry.seconds))))
     return entries.map(entry => ({
         ...entry,
@@ -199,6 +204,13 @@ function coverage(attempts: bigint, total: bigint) {
             <p class="text-xs leading-relaxed text-gemini-subtext">
                 Logarithmic scale: each equal increase represents a multiplication in time, not a fixed number of seconds.
                 Times below one second use the minimum visible bar.
+            </p>
+            <p class="text-sm leading-relaxed text-gemini-subtext">
+                An API token is a credential issued by a service. Opaque tokens often contain 128-256 cryptographically random
+                bits, though formats vary. This comparison uses 32 random bytes encoded as 64 hexadecimal characters:
+                2<sup>256</sup> possibilities. Public prefixes add no secret bits, and structured tokens cannot be judged by
+                visible length alone. Strong tokens resist guessing, not theft: protect them, limit their permissions, and
+                expire or revoke them when needed.
             </p>
         </section>
 

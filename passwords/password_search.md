@@ -31,9 +31,11 @@ what is a good way to show how strong passwords improve the odds. help me design
 
 ## Implemented demonstration
 - Open `/passwords/` on the development or production site. This is a separate public Vue entry point, without the WolfDrive dashboard, router, or API calls.
+- Vite development and preview servers redirect `/passwords` to `/passwords/` before the dashboard SPA fallback, preserving query parameters. The site root `/` remains the media dashboard and requires the Hono API; for the password demonstration alone, run `bun run dev:web` and open `/passwords/`.
 - Run `bun run build` to build both pages, or `bun run build:passwords` to build only the demonstration while preserving existing dashboard output. Both produce `dist/passwords/index.html` and its local assets. The built `dist` directory can also be hosted by a static web server with no backend.
 - Use invented examples only. Inputs are visible, stay in browser memory, and are cleared by **Reset & clear** or a reload; there is no password storage, logging, analytics, or network submission.
 - Exhaustive mode really searches PINs of up to six digits in a Web Worker. Larger spaces use a clearly labeled simulation of the known target's fixed-order position. Real searches are capped at 1,000 candidates per 50 ms tick per example; the requested rate is not a hardware benchmark.
 - Dictionary modes compare actual candidates from a small bundled list. Exhaustion means only "not found in this dictionary"; it does not prove a password is safe.
 - The logarithmic chart models average exhaustive time for uniformly random passwords from the inferred character classes and known length, not human-chosen password strength. Printable ASCII only, up to 64 characters, is supported; unsupported inputs are rejected explicitly.
+- The chart also compares an illustrative opaque API token containing 256 cryptographically random bits (32 bytes / 64 hex characters), using `2^256` possibilities rather than inferring strength from its display length. No token is generated or searched. Token formats vary; public prefixes do not add entropy, and theft bypasses guessing resistance.
 - The progress bars show search-space or dictionary coverage, not how close an unknown password is to being cracked. No real accounts, files, encryption, or password hashes are attacked.

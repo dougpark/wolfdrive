@@ -229,8 +229,7 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                                 }}</span>
                         </span>
                         <span class="mt-1 block truncate text-xs text-gemini-subtext">
-                            {{ [address.importedResident1, address.importedResident2].filter(Boolean).join(' · ') || 'No
-                            imported names' }}
+                            {{ [address.importedResident1, address.importedResident2].filter(Boolean).join(' · ') || 'No imported names' }}
                         </span>
                         <span class="mt-2 flex gap-3 text-[11px] text-gemini-subtext">
                             <span>{{ address.ownerCount }} ownership records</span>
@@ -315,8 +314,7 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                                         date: {{
                                         formatDate(owner.recordedDeedDate) }}</p>
                                     <p v-if="owner.appraisalYear" class="mt-1 text-xs text-gemini-subtext">
-                                        {{ owner.supplementNumber ? `Supplement ${owner.supplementNumber}` : 'Certified
-                                        appraisal roll' }} ·
+                                        {{ owner.supplementNumber ? `Supplement ${owner.supplementNumber}` : 'Certified appraisal roll' }} ·
                                         {{ owner.appraisalYear }}
                                     </p>
                                     <p v-if="owner.parcelId || owner.deedReference"
@@ -349,8 +347,7 @@ onBeforeUnmount(() => clearTimeout(searchTimeout))
                             </div>
                             <div v-if="!detail.deeds.length"
                                 class="rounded-xl border border-dashed border-gemini-border p-4 text-sm text-gemini-subtext">
-                                {{ detail.deedLookup ? 'No deeds were returned by TAD.' : 'Deed history has not been
-                                retrieved yet.' }}
+                                {{ detail.deedLookup ? 'No deeds were returned by TAD.' : 'Deed history has not been retrieved yet.' }}
                             </div>
                             <div v-else class="divide-y divide-gemini-border rounded-xl border border-gemini-border">
                                 <article v-for="deed in detail.deeds" :key="deed.id" class="px-4 py-3">

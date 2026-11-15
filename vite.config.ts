@@ -1,11 +1,28 @@
-import { defineConfig, type UserConfig } from 'vite'
+import { defineConfig, type UserConfig, type ViteDevServer } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
+function redirectPasswordPage(server: Pick<ViteDevServer, 'middlewares'>) {
+    server.middlewares.use((request, response, next) => {
+        const url = request.url
+        if (!url || url.split('?')[0] !== '/passwords') {
+            next()
+            return
+        }
+        response.statusCode = 307
+        response.setHeader('Location', `/passwords/${url.slice('/passwords'.length)}`)
+        response.end()
+    })
+}
 
 export default defineConfig(({ mode }): UserConfig => ({
     plugins: [
+        {
+            name: 'password-page-redirect',
+            configureServer: redirectPasswordPage,
+            configurePreviewServer: redirectPasswordPage,
+        },
         vue(),
         tailwindcss(),
     ],
