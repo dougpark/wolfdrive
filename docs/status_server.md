@@ -418,7 +418,7 @@ Open `/dashboard?token=YOUR_DASHBOARD_TOKEN` for a full-width, full-height displ
    ```text
    https://YOUR_WOLFDRIVE_HOST/dashboard?token=YOUR_DASHBOARD_TOKEN
    ```
-   Chromium's kiosk mode can provide an edge-to-edge display without browser chrome. The page itself fills the viewport and scrolls vertically if the job list grows.
+   Tap the small fullscreen icon in the dashboard header to enter or exit browser fullscreen. Its icon updates when fullscreen changes, including Escape. Fullscreen requires a click/tap and browser support; denied or unsupported requests display an error. Chromium's kiosk mode remains an alternative for an always-on display without browser chrome. The page itself fills the viewport and scrolls vertically if the job list grows.
 
 The dashboard refreshes automatically every 30 seconds while visible, immediately on opening, and when a hidden tab becomes visible. Rows show a green check for jobs on track, a red X for jobs needing attention (including unknown status), and a neutral pause icon for paused jobs. Each row includes the display name and a concise last-run time/result, with running or monitoring conditions appended. Service heartbeat jobs show the last-seen time and reported health.
 

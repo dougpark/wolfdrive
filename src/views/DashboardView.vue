@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Activity, CircleCheck, CirclePause, CircleX, WifiOff } from 'lucide-vue-next'
+import { Activity, CircleCheck, CirclePause, CircleX, Maximize, Minimize, WifiOff } from 'lucide-vue-next'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { useDashboard } from '@/composables/useDashboard'
 import type { DashboardJob } from '@/types/status'
 
@@ -10,7 +11,34 @@ const token = computed(() => typeof route.query.token === 'string' ? route.query
 const { data, error, loading, refresh, dispose } = useDashboard(token)
 const attention = computed(() => data.value?.jobs.filter(job => job.needsAttention).length ?? 0)
 const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+const isFullscreen = ref(false)
+const fullscreenBusy = ref(false)
+const fullscreenError = ref('')
 let timer: ReturnType<typeof setInterval>
+
+function syncFullscreen() {
+    isFullscreen.value = Boolean(document.fullscreenElement)
+}
+async function toggleFullscreen() {
+    if (fullscreenBusy.value) return
+    fullscreenBusy.value = true
+    fullscreenError.value = ''
+    try {
+        if (document.fullscreenElement) {
+            await document.exitFullscreen()
+        } else {
+            if (!document.fullscreenEnabled || typeof document.documentElement.requestFullscreen !== 'function') {
+                throw new Error('Fullscreen is unavailable in this browser or page. Use browser kiosk mode instead.')
+            }
+            await document.documentElement.requestFullscreen()
+        }
+        syncFullscreen()
+    } catch (err) {
+        fullscreenError.value = err instanceof Error ? err.message : 'Unable to change fullscreen mode.'
+    } finally {
+        fullscreenBusy.value = false
+    }
+}
 
 function ago(time: number): string {
     const seconds = (time - (data.value?.evaluatedAt ?? Date.now())) / 1000
@@ -39,6 +67,8 @@ function description(job: DashboardJob): string {
 function visibility() { if (!document.hidden) void refresh() }
 watch(token, () => { void refresh() })
 onMounted(() => {
+    syncFullscreen()
+    document.addEventListener('fullscreenchange', syncFullscreen)
     void refresh()
     timer = setInterval(() => { if (!document.hidden) void refresh() }, 30000)
     document.addEventListener('visibilitychange', visibility)
@@ -46,6 +76,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     clearInterval(timer)
     document.removeEventListener('visibilitychange', visibility)
+    document.removeEventListener('fullscreenchange', syncFullscreen)
     dispose()
 })
 </script>
@@ -57,8 +88,21 @@ onBeforeUnmount(() => {
                 <Activity class="h-8 w-8 text-gemini-blue" />
                 <h1 class="text-3xl font-medium tracking-tight">WolfDrive dashboard</h1>
             </div>
-            <p class="text-sm text-gemini-subtext">Updates every 30 seconds</p>
+            <div class="flex items-center gap-4">
+                <p class="text-sm text-gemini-subtext">Updates every 30 seconds</p>
+                <BaseButton
+                    :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+                    :title="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+                    :aria-pressed="isFullscreen"
+                    :disabled="fullscreenBusy"
+                    @click="toggleFullscreen"
+                >
+                    <Minimize v-if="isFullscreen" class="h-5 w-5" aria-hidden="true" />
+                    <Maximize v-else class="h-5 w-5" aria-hidden="true" />
+                </BaseButton>
+            </div>
         </header>
+        <p v-if="fullscreenError" role="alert" class="text-sm text-gemini-purple">{{ fullscreenError }}</p>
 
         <section aria-labelledby="dashboard-jobs-title" class="w-full rounded-3xl border border-gemini-border bg-gemini-card p-6 shadow-sm">
             <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
