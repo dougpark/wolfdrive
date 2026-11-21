@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type { StatusEventRecord, StatusJobConfig, StatusJobPage, StatusPage, StatusRun } from '@/types/status'
 
 const BASE = '/api/status/v1'
+const TOKEN_STORAGE_KEY = 'wolfdrive-status-token'
 
 export function useStatus() {
     const token = ref('')
@@ -10,7 +11,15 @@ export function useStatus() {
     const actionError = ref('')
     const lastRefresh = ref<number | null>(null)
     const busy = ref(false)
+    const storageError = ref('')
     let refreshVersion = 0
+
+    try {
+        token.value = localStorage.getItem(TOKEN_STORAGE_KEY) ?? ''
+    } catch (err) {
+        console.error('Unable to restore Status access token:', err)
+        storageError.value = 'Browser storage is unavailable. Enter your Status token for this visit.'
+    }
 
     async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
         const response = await fetch(`${BASE}${path}`, {
@@ -73,7 +82,7 @@ export function useStatus() {
     function detail(id: string, runId: string, offset = 0) {
         return request<{ run: StatusRun; events: StatusPage<StatusEventRecord> }>(`/jobs/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}?offset=${offset}&limit=50`)
     }
-    function disconnect() {
+    function dispose() {
         refreshVersion++
         token.value = ''
         page.value = null
@@ -81,5 +90,26 @@ export function useStatus() {
         actionError.value = ''
         lastRefresh.value = null
     }
-    return { token, page, error, actionError, busy, lastRefresh, refresh, request, saveJob, changeJob, rotateToken, runs, detail, disconnect }
+    function connect(value: string) {
+        dispose()
+        token.value = value.trim()
+        storageError.value = ''
+        try {
+            localStorage.setItem(TOKEN_STORAGE_KEY, token.value)
+        } catch (err) {
+            console.error('Unable to save Status access token:', err)
+            storageError.value = 'Could not save your Status token in this browser. It will only work for this visit.'
+        }
+    }
+    function disconnect() {
+        dispose()
+        storageError.value = ''
+        try {
+            localStorage.removeItem(TOKEN_STORAGE_KEY)
+        } catch (err) {
+            console.error('Unable to remove saved Status access token:', err)
+            storageError.value = "Could not remove the saved Status token. Clear this site's browser data to forget it."
+        }
+    }
+    return { token, page, error, actionError, busy, storageError, lastRefresh, refresh, request, saveJob, changeJob, rotateToken, runs, detail, connect, disconnect, dispose }
 }

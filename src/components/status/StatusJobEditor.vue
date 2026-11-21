@@ -4,6 +4,7 @@ import BaseButton from '../ui/BaseButton.vue'
 import BaseInput from '../ui/BaseInput.vue'
 import ModalShell from '../ModalShell.vue'
 import type { MonitoringMode, StatusJobConfig, StatusJobSummary } from '@/types/status'
+import { formatLocalScheduleTime, parseLocalScheduleTime } from './localScheduleTime'
 
 const props = defineProps<{ job: StatusJobSummary | null; busy: boolean; error: string }>()
 const emit = defineEmits<{ close: []; save: [id: string, config: StatusJobConfig] }>()
@@ -13,7 +14,9 @@ const description = ref(props.job?.description ?? '')
 const tags = ref(props.job?.tags.join(', ') ?? '')
 const mode = ref<MonitoringMode>(props.job?.mode ?? 'manual')
 const interval = ref(String(props.job?.intervalSeconds ?? 86400))
-const anchor = ref(props.job?.anchorAt ? new Date(props.job.anchorAt).toISOString() : new Date().toISOString())
+const originalAnchor = props.job?.anchorAt ?? null
+const anchor = ref(formatLocalScheduleTime(originalAnchor ?? Date.now()))
+const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 const grace = ref(String(props.job?.graceSeconds ?? 300))
 const heartbeat = ref(props.job?.heartbeatSeconds ? String(props.job.heartbeatSeconds) : '')
 const runtime = ref(props.job?.maxRuntimeSeconds ? String(props.job.maxRuntimeSeconds) : '')
@@ -21,10 +24,14 @@ const localError = ref('')
 
 function save() {
     localError.value = ''
-    const anchorAt = mode.value === 'scheduled' ? Date.parse(anchor.value) : null
-    if (mode.value === 'scheduled' && !Number.isFinite(anchorAt)) {
-        localError.value = 'Enter an ISO timestamp including Z or a timezone offset.'
-        return
+    let anchorAt: number | null = null
+    if (mode.value === 'scheduled') {
+        try {
+            anchorAt = parseLocalScheduleTime(anchor.value, originalAnchor)
+        } catch (error) {
+            localError.value = error instanceof Error ? error.message : 'Unable to read the local start time.'
+            return
+        }
     }
     emit('save', id.value, {
         name: name.value, description: description.value,
@@ -57,7 +64,8 @@ function save() {
                 </label>
                 <template v-if="mode === 'scheduled'">
                     <label class="block text-sm">Interval (seconds)<BaseInput v-model="interval" type="number" required min="1" max="31536000" /></label>
-                    <label class="block text-sm">First expected start (ISO timestamp)<BaseInput v-model="anchor" required placeholder="2026-11-22T02:00:00-06:00" /></label>
+                    <label class="block text-sm">First expected start (local time)<BaseInput v-model="anchor" type="datetime-local" required /></label>
+                    <p class="text-xs text-gemini-subtext">Timezone: {{ localTimezone }} (your browser's local time). No UTC conversion needed.</p>
                     <label class="block text-sm">Start grace period (seconds)<BaseInput v-model="grace" type="number" min="0" max="31536000" required /></label>
                     <p class="text-xs leading-relaxed text-gemini-subtext">Intervals do not follow daylight-saving changes. Cron/timezone scheduling is not yet supported. Changing the schedule starts a new monitoring epoch; old run history remains.</p>
                 </template>

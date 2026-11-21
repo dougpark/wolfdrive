@@ -9,7 +9,7 @@ import { useStatus } from '@/composables/useStatus'
 import type { StatusEventRecord, StatusJobConfig, StatusJobSummary, StatusPage, StatusRun } from '@/types/status'
 
 const status = useStatus()
-const { token, page, error, actionError, busy, lastRefresh } = status
+const { token, page, error, actionError, busy, storageError, lastRefresh } = status
 const tokenInput = ref('')
 const search = ref('')
 const filter = ref('')
@@ -50,8 +50,7 @@ async function refresh() {
     }))
 }
 async function connect() {
-    status.disconnect()
-    token.value = tokenInput.value.trim()
+    status.connect(tokenInput.value)
     tokenInput.value = ''
     offset.value = 0
     await refresh()
@@ -133,6 +132,7 @@ watch([search, filter, mode, archived], () => {
 })
 watch(offset, refresh)
 onMounted(() => {
+    void refresh()
     timer = setInterval(() => { if (!document.hidden) void refresh() }, 15000)
     document.addEventListener('visibilitychange', visibility)
 })
@@ -140,7 +140,8 @@ onBeforeUnmount(() => {
     clearInterval(timer)
     clearTimeout(debounce)
     document.removeEventListener('visibilitychange', visibility)
-    disconnect()
+    detailVersion++
+    status.dispose()
 })
 </script>
 
@@ -157,12 +158,14 @@ onBeforeUnmount(() => {
                 <BaseButton @click="disconnect">Lock</BaseButton>
             </div>
         </header>
-        <form v-if="!token || !page" class="space-y-4 rounded-3xl border border-gemini-border bg-gemini-card p-6 shadow-sm" @submit.prevent="connect">
+        <form v-if="!token || (!page && error)" class="space-y-4 rounded-3xl border border-gemini-border bg-gemini-card p-6 shadow-sm" @submit.prevent="connect">
             <h2 class="font-medium">Unlock Status</h2>
-            <p class="text-sm leading-relaxed text-gemini-subtext">Configure STATUS_ADMIN_TOKEN on the server, then enter it here. STATUS_READ_TOKEN grants read-only access. Credentials stay in memory for this page only. Use HTTPS for network access.</p>
+            <p class="text-sm leading-relaxed text-gemini-subtext">Configure STATUS_ADMIN_TOKEN on the server, then enter it here. STATUS_READ_TOKEN grants read-only access. This browser remembers your token across visits. Lock removes the saved token. Use HTTPS for network access.</p>
             <label class="block text-sm">Status access token<BaseInput v-model="tokenInput" type="password" required autocomplete="off" /></label>
             <BaseButton variant="primary" type="submit">Unlock</BaseButton>
         </form>
+        <p v-if="token && !page && !error" class="text-sm text-gemini-subtext">Loading saved Status access...</p>
+        <p v-if="storageError" role="alert" class="text-sm text-gemini-purple">{{ storageError }}</p>
         <div v-if="error" role="alert" class="flex items-start gap-3 rounded-xl border border-gemini-purple bg-gemini-surface p-4 text-gemini-purple">
             <AlertTriangle class="h-5 w-5 shrink-0" /><div><p class="font-medium">Status unavailable or access denied. Displayed data may be stale.</p><p>{{ error }}</p><p>Last successful refresh: {{ date(lastRefresh) }}</p></div>
         </div>

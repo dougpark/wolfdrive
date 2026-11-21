@@ -305,7 +305,7 @@ Verify before calling the first version complete:
 1. Apply migrations with `bun run db:migrate`.
 2. Generate a random credential locally, for example `bun -e 'console.log(crypto.randomUUID() + crypto.randomUUID())'`. Put it in your protected, untracked `.env` as `STATUS_ADMIN_TOKEN`. It must be at least 32 characters. Optionally set a separate `STATUS_READ_TOKEN` (also at least 32 characters).
 3. Build with `bun run build`, then start with `bun run start` (or restart your Docker deployment). Docker Compose forwards both variables from the host environment / `.env`; empty admin configuration disables dashboard/admin access.
-4. Open **Homelab Status** in the sidebar (`/status`). Enter the admin token to register jobs, or the read token to view them. The browser keeps credentials only in memory and discards them when leaving the page or locking it.
+4. Open **Homelab Status** in the sidebar (`/status`). Enter the admin token to register jobs, or the read token to view them. The browser remembers the token in this site's `localStorage` across navigation, reloads, and browser restarts, and automatically reconnects. **Lock** removes the saved token. Only use this on trusted browsers; scripts running on the same origin can access local storage. If browser storage is blocked, a visible warning explains that the token cannot be remembered.
 5. Register a job with a stable ID. Save its reporting token immediately; it is shown once and only its SHA-256 hash is stored.
 
 No production credentials are generated or written by migrations. The feature protects its own routes; it does not retrofit authentication to unrelated WolfDrive routes.
@@ -315,7 +315,7 @@ Keep the server on localhost or a firewalled LAN, use HTTPS when credentials cro
 ### Job configuration
 
 - **Manual:** no deadlines. Unknown until the first report.
-- **Scheduled:** positive `intervalSeconds`, millisecond Unix `anchorAt` for the first expected start, and `graceSeconds` (default 300). Intervals are elapsed time, not timezone-aware calendar scheduling.
+- **Scheduled:** choose the first expected start using the local date-and-time picker; its timezone is your browser's timezone, displayed beneath the field. For a nightly backup, select tomorrow at 2:00 AM and use an interval of `86400`. The API still uses positive `intervalSeconds`, millisecond Unix `anchorAt`, and `graceSeconds` (default 300). Existing anchors display in local time and remain unchanged when saving unrelated edits. Invalid/nonexistent daylight-saving times are rejected; a newly selected repeated local hour uses its earlier occurrence. Intervals are elapsed time, not timezone-aware calendar scheduling, so a 24-hour interval does not stay at the same local hour through daylight-saving changes. Manual runs do not reset the schedule.
 - **Heartbeat:** positive `heartbeatSeconds`; service reports must include a fresh `occurredAt`. An explicit `health: healthy` is required to establish healthy service status.
 - Optional `maxRuntimeSeconds` and active-run `heartbeatSeconds` track unresolved executions.
 - Pause/archive suppress attention conditions while keeping reports and history. Resuming uses the original schedule: missed occurrences during a pause can become visible again. Change the anchor/schedule to start a new monitoring epoch if maintenance should establish a fresh baseline.
