@@ -18,6 +18,7 @@ import ProjectsView from '../views/ProjectsView.vue'
 import ProjectView from '../views/ProjectView.vue'
 import MusicPlayerView from '../views/MusicPlayerView.vue'
 import ResearchView from '../views/ResearchView.vue'
+import StatusView from '../views/StatusView.vue'
 
 export const router = createRouter({
     history: createWebHistory(),
@@ -42,5 +43,6 @@ export const router = createRouter({
         { path: '/projects', component: ProjectsView },
         { path: '/projects/:id', component: ProjectView },
         { path: '/research/:id?', component: ResearchView },
+        { path: '/status', component: StatusView },
     ],
 })

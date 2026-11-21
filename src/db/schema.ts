@@ -1,5 +1,72 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm'
+import type { MonitoringMode, RunOutcome, ServiceHealth, StatusEventInput, StatusMetrics, StatusProgress } from '../types/status'
+
+export const statusJobs = sqliteTable('status_jobs', {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    tags: text('tags', { mode: 'json' }).$type<string[]>().notNull(),
+    mode: text('mode').$type<MonitoringMode>().notNull(),
+    intervalSeconds: integer('interval_seconds'),
+    anchorAt: integer('anchor_at'),
+    graceSeconds: integer('grace_seconds').notNull().default(300),
+    maxRuntimeSeconds: integer('max_runtime_seconds'),
+    heartbeatSeconds: integer('heartbeat_seconds'),
+    paused: integer('paused', { mode: 'boolean' }).notNull().default(false),
+    archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastSeenAt: integer('last_seen_at'),
+    lastServiceHeartbeatAt: integer('last_service_heartbeat_at'),
+    serviceHealth: text('service_health').$type<ServiceHealth>(),
+    scheduleEpoch: integer('schedule_epoch').notNull().default(0),
+    retiredMatches: integer('retired_matches').notNull().default(0),
+}, (table) => [index('status_jobs_archived_idx').on(table.archived)])
+
+export const statusRuns = sqliteTable('status_runs', {
+    key: integer('key').primaryKey({ autoIncrement: true }),
+    id: text('id').notNull(),
+    jobId: text('job_id').notNull().references(() => statusJobs.id),
+    firstReceivedAt: integer('first_received_at').notNull(),
+    startedAt: integer('started_at'),
+    finishedAt: integer('finished_at'),
+    lastHeartbeatAt: integer('last_heartbeat_at'),
+    source: text('source'),
+    outcome: text('outcome').$type<RunOutcome>().notNull().default('running'),
+    exitCode: integer('exit_code'),
+    rawStatus: text('raw_status'),
+    lastSequence: integer('last_sequence').notNull().default(-1),
+    terminalSequence: integer('terminal_sequence'),
+    startSequence: integer('start_sequence'),
+    scheduleEpoch: integer('schedule_epoch').notNull(),
+    scheduleIndex: integer('schedule_index'),
+    message: text('message'),
+    progress: text('progress', { mode: 'json' }).$type<StatusProgress>(),
+    metrics: text('metrics', { mode: 'json' }).$type<StatusMetrics>(),
+}, (table) => [
+    uniqueIndex('status_runs_job_run_idx').on(table.jobId, table.id),
+    index('status_runs_job_start_idx').on(table.jobId, table.startedAt),
+    index('status_runs_schedule_idx').on(table.jobId, table.scheduleEpoch, table.scheduleIndex),
+])
+
+export const statusEvents = sqliteTable('status_events', {
+    key: integer('key').primaryKey({ autoIncrement: true }),
+    jobId: text('job_id').notNull().references(() => statusJobs.id),
+    eventId: text('event_id').notNull(),
+    runId: text('run_id'),
+    sequence: integer('sequence'),
+    type: text('type').$type<StatusEventInput['type']>().notNull(),
+    receivedAt: integer('received_at').notNull(),
+    occurredAt: integer('occurred_at'),
+    clockSkewMs: integer('clock_skew_ms'),
+    payloadHash: text('payload_hash').notNull(),
+    payload: text('payload', { mode: 'json' }).$type<StatusEventInput>(),
+}, (table) => [
+    uniqueIndex('status_events_job_event_idx').on(table.jobId, table.eventId),
+    uniqueIndex('status_events_run_sequence_idx').on(table.jobId, table.runId, table.sequence),
+    index('status_events_job_received_idx').on(table.jobId, table.receivedAt),
+])
 
 // 0. Core Media File Metadata
 export const files = sqliteTable('files', {

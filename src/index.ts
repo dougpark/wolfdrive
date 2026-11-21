@@ -11,6 +11,7 @@ import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
+import { createStatusApi } from './services/statusApi'
 import {
     tags,
     fileTags,
@@ -1443,6 +1444,21 @@ app.post('/api/settings/ignore', async (c) => {
 
     return c.json({ success: true, patterns })
 })
+
+const statusApi = createStatusApi(db, {
+    adminToken: process.env.STATUS_ADMIN_TOKEN,
+    readToken: process.env.STATUS_READ_TOKEN,
+})
+app.route('/api/status/v1', statusApi.app)
+app.all('/api/status/*', c => c.json({ error: 'Unknown status endpoint' }, 404))
+const statusSweepTimer = setInterval(() => {
+    try {
+        statusApi.sweep()
+    } catch (error) {
+        console.error('Status retention sweep failed:', error)
+    }
+}, 60000)
+statusSweepTimer.unref()
 
 // Serve Static Frontend Assets (JS, CSS, images from Vite build)
 app.use('/*', serveStatic({ root: './dist' }))

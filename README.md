@@ -9,6 +9,7 @@ A lightweight, high-performance local media and file management server built wit
 - **High-Performance Backend:** Powered by the Bun runtime and Hono framework for minimal overhead and instant request handling.
 - **Type-Safe Database:** Managed via Drizzle ORM over Bun's native SQLite execution engine (`bun:sqlite`).
 - **Seamless Dev Workflow:** Parallel execution setup using Vite for Hot Module Replacement (HMR).
+- **Homelab Status:** Track scheduled jobs, one-off runs, logs, and service heartbeats through a scoped HTTP reporting API and dashboard. See [setup and reporting examples](docs/status_server.md#running-the-implemented-version).
 
 ## Tech Stack
 

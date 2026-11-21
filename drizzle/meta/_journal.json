@@ -127,6 +127,13 @@
       "when": 1794206962485,
       "tag": "0017_flimsy_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1795292543069,
+      "tag": "0018_exotic_molten_man",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,7 @@ import {
     Shield,
     Briefcase,
     Landmark,
+    Activity,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -141,6 +142,13 @@ const categories = [
 
         <!-- Category Nav Links -->
         <nav class="flex flex-col gap-1">
+            <RouterLink to="/status" aria-label="Homelab Status" title="Homelab Status"
+                class="flex items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors md:justify-start md:px-3.5"
+                :class="route.path.startsWith('/status') ? 'bg-gemini-blue/10 text-gemini-blue font-semibold' : 'text-gemini-subtext hover:bg-gemini-surface hover:text-gemini-text'">
+                <Activity class="h-4 w-4 shrink-0" />
+                <span class="hidden md:inline">Homelab Status</span>
+            </RouterLink>
+
             <RouterLink to="/projects" aria-label="Projects" title="Projects"
                 class="flex items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors md:justify-start md:px-3.5" :class="[
                     route.path.startsWith('/projects')
