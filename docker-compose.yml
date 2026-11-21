@@ -20,6 +20,7 @@ services:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - STATUS_ADMIN_TOKEN=${STATUS_ADMIN_TOKEN:-}
       - STATUS_READ_TOKEN=${STATUS_READ_TOKEN:-}
+      - STATUS_DASHBOARD_TOKEN=${STATUS_DASHBOARD_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
       

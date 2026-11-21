@@ -6,9 +6,9 @@ const selectedTheme = ref<ThemeMode>('system')
 const isDark = ref<boolean>(false)
 
 export function useTheme() {
-    function applyTheme(mode: ThemeMode) {
+    function applyTheme(mode: ThemeMode, persist = true) {
         selectedTheme.value = mode
-        localStorage.setItem('wolfdrive-theme', mode)
+        if (persist) localStorage.setItem('wolfdrive-theme', mode)
 
         let enableDark = false
         if (mode === 'dark') {
@@ -26,7 +26,11 @@ export function useTheme() {
         document.documentElement.style.backgroundColor = enableDark ? '#131314' : '#ffffff'
     }
 
-    function initTheme() {
+    function initTheme(override?: ThemeMode) {
+        if (override) {
+            applyTheme(override, false)
+            return
+        }
         const saved = localStorage.getItem('wolfdrive-theme') as ThemeMode | null
         if (saved) {
             applyTheme(saved)

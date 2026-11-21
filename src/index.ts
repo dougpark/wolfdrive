@@ -1448,6 +1448,7 @@ app.post('/api/settings/ignore', async (c) => {
 const statusApi = createStatusApi(db, {
     adminToken: process.env.STATUS_ADMIN_TOKEN,
     readToken: process.env.STATUS_READ_TOKEN,
+    dashboardToken: process.env.STATUS_DASHBOARD_TOKEN,
 })
 app.route('/api/status/v1', statusApi.app)
 app.all('/api/status/*', c => c.json({ error: 'Unknown status endpoint' }, 404))
@@ -1461,6 +1462,11 @@ const statusSweepTimer = setInterval(() => {
 statusSweepTimer.unref()
 
 // Serve Static Frontend Assets (JS, CSS, images from Vite build)
+app.use('/dashboard', async (c, next) => {
+    c.header('Referrer-Policy', 'no-referrer')
+    c.header('Cache-Control', 'no-store')
+    await next()
+})
 app.use('/*', serveStatic({ root: './dist' }))
 
 // SPA fallback: Vue Router resolves routes after serving the application shell.

@@ -270,7 +270,7 @@ Retry transient network errors and `429/5xx` with bounded backoff and unchanged 
 
 ## Local deployment and access
 
-Keep the reporting endpoint LAN-only with firewall rules and no public port forwarding. Use HTTPS when tokens cross the network; a trusted LAN is not a substitute for protecting bearer credentials. Store tokens in protected environment files, never query strings, source control, or logs.
+Keep the reporting endpoint LAN-only with firewall rules and no public port forwarding. Use HTTPS when tokens cross the network; a trusted LAN is not a substitute for protecting bearer credentials. Store tokens in protected environment files, never source control or logs. Admin, general read, and reporting tokens must not appear in query strings; the limited kiosk dashboard token is the explicit exception described below.
 
 The existing backend's hardcoded default user context is not authentication. Before enabling job management or exposing status history beyond a trusted localhost deployment, add explicit admin/read authorization and separate it from job-scoped write-only reporting tokens.
 
@@ -401,3 +401,33 @@ Run focused verification with `bun test src/services/statusServer.test.ts` and b
 ### Deferred features
 
 Cron/IANA timezone schedules, notifications, SSE, persistent producer outboxes, configurable retention/disk budgets, and persisted monitoring-transition history are not part of this version. Current conditions are recomputed from durable job/run evidence after restart; the periodic sweep handles retention, not fabricated process outcomes.
+
+## Raspberry Pi / kiosk dashboard
+
+Open `/dashboard?token=YOUR_DASHBOARD_TOKEN` for a full-width, full-height display without the sidebar, login form, or keyboard controls. It opens in dark mode, including the initial page paint, without changing WolfDrive's saved theme preference; leaving the dashboard restores that preference. The first horizontal card lists job status, one line per job; additional cards can be added below it later.
+
+### Setup
+
+1. Generate a short random read credential locally:
+   ```bash
+   bun -e 'import { randomBytes } from "node:crypto"; console.log(randomBytes(9).toString("base64url"))'
+   ```
+2. Save it as `STATUS_DASHBOARD_TOKEN` in your protected `.env` or server environment. The minimum length is 12 characters. It must differ from `STATUS_ADMIN_TOKEN` and `STATUS_READ_TOKEN`. Docker Compose forwards it into the container; restart/redeploy after changing it.
+3. In **Homelab Status**, edit each desired job and add `dashboard` to its comma-separated tags. Only exact tags match, ignoring case and surrounding whitespace; names/descriptions containing the word do not qualify. Archived jobs are excluded.
+4. Configure the Raspberry Pi's kiosk browser to open, for example:
+   ```text
+   https://YOUR_WOLFDRIVE_HOST/dashboard?token=YOUR_DASHBOARD_TOKEN
+   ```
+   Chromium's kiosk mode can provide an edge-to-edge display without browser chrome. The page itself fills the viewport and scrolls vertically if the job list grows.
+
+The dashboard refreshes automatically every 30 seconds while visible, immediately on opening, and when a hidden tab becomes visible. Rows show a green check for jobs on track, a red X for jobs needing attention (including unknown status), and a neutral pause icon for paused jobs. Each row includes the display name and a concise last-run time/result, with running or monitoring conditions appended. Service heartbeat jobs show the last-seen time and reported health.
+
+When a refresh fails, a prominent warning marks cached data stale; cached rows no longer show green OK icons. The last successful update remains visible, and later successful refreshes recover automatically.
+
+### Limited URL access
+
+The URL credential grants **only** `GET /api/status/v1/dashboard`, which returns minimal summaries for dashboard-tagged jobs. It cannot manage jobs, submit events, read logs, or list untagged jobs. The browser sends it in an Authorization header when fetching summaries; it is not placed in API query strings or loaded from the saved Status admin token. Dashboard page/API responses disable caching and referrer forwarding in production.
+
+This URL is a bearer credential and may remain in browser history, kiosk configuration, screenshots, or reverse-proxy access logs. Keep it on a trusted firewalled LAN, prefer HTTPS, and configure any proxy to avoid logging token query strings. Rotate access by changing `STATUS_DASHBOARD_TOKEN` and updating the kiosk URL. Never use an admin/reporting token in the dashboard URL.
+
+Verify with `bun test src/services/statusServer.test.ts src/composables/useDashboard.test.ts` and `bun run build`.

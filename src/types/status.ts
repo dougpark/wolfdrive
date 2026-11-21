@@ -93,3 +93,22 @@ export interface StatusJobPage extends StatusPage<StatusJobSummary> {
     canManage: boolean
     ingestion: { rejectedEvents: number; storageErrors: number; lastAcceptedAt: number | null; lastSweepAt: number | null }
 }
+
+export interface DashboardJob {
+    id: string
+    name: string
+    mode: MonitoringMode
+    needsAttention: boolean
+    conditions: StatusCondition[]
+    lastRunAt: number | null
+    lastOutcome: Exclude<RunOutcome, 'running'> | null
+    activeRunCount: number
+    activeRunStartedAt: number | null
+    lastSeenAt: number | null
+    serviceHealth: ServiceHealth | null
+}
+
+export interface DashboardSummary {
+    evaluatedAt: number
+    jobs: DashboardJob[]
+}

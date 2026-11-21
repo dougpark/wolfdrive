@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { statusEvents, statusJobs, statusRuns } from '../db/schema'
-import type { StatusJobPage } from '../types/status'
+import type { DashboardSummary, StatusJobPage } from '../types/status'
 import { hashToken, ingestStatusEvent, newReportingToken, statusRunDetail, summarizeStatusJob, sweepStatusRetention, tokenMatches } from './statusServer'
 import type { StatusDatabase } from './statusServer'
 import { MAX_EVENT_BYTES, StatusError, validateEvent, validateJobConfig, validateJobId } from './statusValidation'
@@ -10,6 +10,7 @@ import { MAX_EVENT_BYTES, StatusError, validateEvent, validateJobConfig, validat
 interface StatusOptions {
     adminToken?: string
     readToken?: string
+    dashboardToken?: string
     now?: () => number
 }
 type Variables = { canManage: boolean }
@@ -35,7 +36,24 @@ export function createStatusApi(database: StatusDatabase, options: StatusOptions
         return c.json({ error: 'Request exceeds 64 KiB' }, 413)
     } }))
     app.use('*', async (c, next) => {
-        if (c.req.method === 'POST' && /^\/jobs\/[^/]+\/events$/.test(c.req.path.replace(/^\/api\/status\/v1/, ''))) {
+        const path = c.req.path.replace(/^\/api\/status\/v1/, '')
+        if (path === '/dashboard') {
+            c.header('Cache-Control', 'no-store')
+            c.header('Referrer-Policy', 'no-referrer')
+            if (c.req.method !== 'GET') throw new StatusError('Dashboard access is read-only', 403)
+            const dashboardToken = options.dashboardToken
+            if (!dashboardToken || dashboardToken.length < 12) {
+                throw new StatusError('Set STATUS_DASHBOARD_TOKEN to at least 12 characters to enable the dashboard', 503)
+            }
+            if (dashboardToken === options.adminToken || dashboardToken === options.readToken) {
+                throw new StatusError('STATUS_DASHBOARD_TOKEN must be different from admin and general read tokens', 503)
+            }
+            const supplied = token(c.req.header('Authorization'))
+            if (!supplied || !tokenMatches(supplied, hashToken(dashboardToken))) throw new StatusError('Invalid dashboard read token', 401)
+            await next()
+            return
+        }
+        if (c.req.method === 'POST' && /^\/jobs\/[^/]+\/events$/.test(path)) {
             await next()
             return
         }
@@ -82,6 +100,28 @@ export function createStatusApi(database: StatusDatabase, options: StatusOptions
             throw new StatusError('Status retention failed; storage requires attention', 503)
         }
     }
+    app.get('/dashboard', c => {
+        const time = now()
+        const jobs = database.select().from(statusJobs).where(eq(statusJobs.archived, false)).all()
+            .filter(row => row.tags.some(tag => tag.trim().toLowerCase() === 'dashboard'))
+            .map(row => summarizeStatusJob(database, row, time))
+            .sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention) || a.name.localeCompare(b.name))
+            .map(row => ({
+                id: row.id,
+                name: row.name,
+                mode: row.mode,
+                needsAttention: row.needsAttention,
+                conditions: row.conditions,
+                lastRunAt: row.lastRun?.finishedAt ?? null,
+                lastOutcome: row.lastRun && row.lastRun.outcome !== 'running' ? row.lastRun.outcome : null,
+                activeRunCount: row.activeRuns.length,
+                activeRunStartedAt: row.activeRuns.length ? Math.max(...row.activeRuns.map(run => run.startedAt ?? run.firstReceivedAt)) : null,
+                lastSeenAt: row.lastSeenAt,
+                serviceHealth: row.serviceHealth,
+            }))
+        const result: DashboardSummary = { jobs, evaluatedAt: time }
+        return c.json(result)
+    })
     app.post('/jobs/:jobId/events', async c => {
         const row = job(c.req.param('jobId'))
         const supplied = token(c.req.header('Authorization'))

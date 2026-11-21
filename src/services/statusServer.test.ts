@@ -8,13 +8,14 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as schema from '../db/schema'
-import type { StatusEventInput, StatusJobConfig, StatusJobPage, StatusPage, StatusRun } from '../types/status'
+import type { DashboardSummary, StatusEventInput, StatusJobConfig, StatusJobPage, StatusPage, StatusRun } from '../types/status'
 import { createStatusApi } from './statusApi'
 import { sweepStatusRetention } from './statusServer'
 import { validateEvent } from './statusValidation'
 
 const admin = 'test-admin-token-with-at-least-32-characters'
 const reader = 'test-reader-token-with-at-least-32-characters'
+const dashboardReader = 'pi-read-only'
 const BASE = '/api/status/v1'
 let sqlite: Database
 let database: ReturnType<typeof drizzle<typeof schema>>
@@ -28,7 +29,7 @@ beforeEach(() => {
     database = drizzle(sqlite, { schema })
     migrate(database, { migrationsFolder: new URL('../../drizzle', import.meta.url).pathname })
     time = originalTime
-    app = new Hono().route(BASE, createStatusApi(database, { adminToken: admin, readToken: reader, now: () => time }).app)
+    app = new Hono().route(BASE, createStatusApi(database, { adminToken: admin, readToken: reader, dashboardToken: dashboardReader, now: () => time }).app)
 })
 afterEach(() => sqlite.close())
 
@@ -60,6 +61,67 @@ async function summaries() {
 }
 
 describe('universal status API', () => {
+    test('dashboard token grants only dashboard summaries and requires explicit configuration', async () => {
+        expect((await request('/dashboard', 'GET', undefined, dashboardReader)).status).toBe(200)
+        expect((await request('/dashboard', 'GET', undefined, '')).status).toBe(401)
+        expect((await request(`/dashboard?token=${dashboardReader}`, 'GET', undefined, '')).status).toBe(401)
+        expect((await request('/dashboard', 'POST', {}, dashboardReader)).status).toBe(403)
+        expect((await request('/jobs', 'GET', undefined, dashboardReader)).status).toBe(401)
+        expect((await request('/jobs/backup/runs', 'GET', undefined, dashboardReader)).status).toBe(401)
+        expect((await request('/jobs/backup/token', 'POST', undefined, dashboardReader)).status).toBe(401)
+        for (const dashboardToken of [undefined, 'too-short', admin]) {
+            const restricted = createStatusApi(database, { adminToken: admin, dashboardToken }).app
+            const response = await restricted.request('/dashboard', { headers: { Authorization: `Bearer ${dashboardReader}` } })
+            expect(response.status).toBe(503)
+        }
+    })
+
+    test('dashboard lists exact dashboard-tagged jobs only, without logs or metadata', async () => {
+        const reporting = await register('visible', { name: 'NAS Backup', tags: ['dashboard', 'backup'] })
+        await register('hidden', { name: 'Dashboard in name only', tags: ['ubuntu'] })
+        await register('partial', { tags: ['dashboard-extra'] })
+        await register('archived', { tags: ['dashboard'] })
+        await request('/jobs/archived', 'PATCH', { archived: true })
+        await register('unknown', { tags: [' DASHBOARD '] })
+        const id = crypto.randomUUID()
+        await report(reporting, event('started', id, 0), 'visible')
+        time += 1000
+        await report(reporting, event('completed', id, 1, { outcome: 'succeeded', message: 'private details', metadata: { secret: 'private' }, log: 'private log' }), 'visible')
+        const response = await request('/dashboard', 'GET', undefined, dashboardReader)
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        expect(response.headers.get('Referrer-Policy')).toBe('no-referrer')
+        const result = await response.json() as DashboardSummary
+        expect(result.jobs.map(job => job.id)).toEqual(['unknown', 'visible'])
+        expect(result.jobs[0]?.needsAttention).toBe(true)
+        expect(result.jobs[1]).toMatchObject({ name: 'NAS Backup', lastOutcome: 'succeeded', lastRunAt: time, needsAttention: false })
+        expect(JSON.stringify(result)).not.toContain('private')
+        expect(JSON.stringify(result)).not.toContain('tokenHash')
+        expect(result.evaluatedAt).toBe(time)
+    })
+
+    test('dashboard shows every tagged job rather than truncating to an admin pagination limit', async () => {
+        database.insert(schema.statusJobs).values(Array.from({ length: 105 }, (_, index) => ({
+            id: `dashboard-${index}`, name: `Job ${index}`, tags: ['dashboard'], mode: 'manual' as const,
+            tokenHash: 'test-only-unused-hash', createdAt: time,
+        }))).run()
+        const response = await request('/dashboard', 'GET', undefined, dashboardReader)
+        expect((await response.json() as DashboardSummary).jobs).toHaveLength(105)
+    })
+
+    test('dashboard separates failed, unknown, active, and paused monitoring states', async () => {
+        const reporting = await register('failed', { tags: ['dashboard'] })
+        const id = crypto.randomUUID()
+        await report(reporting, event('completed', id, 0, { outcome: 'failed' }), 'failed')
+        time += 1000
+        await report(reporting, event('started', crypto.randomUUID(), 0), 'failed')
+        await register('paused', { tags: ['dashboard'] })
+        await request('/jobs/paused', 'PATCH', { paused: true })
+        const response = await request('/dashboard', 'GET', undefined, dashboardReader)
+        const jobs = (await response.json() as DashboardSummary).jobs
+        expect(jobs.find(job => job.id === 'failed')).toMatchObject({ needsAttention: true, lastOutcome: 'failed', activeRunCount: 1, activeRunStartedAt: time })
+        expect(jobs.find(job => job.id === 'paused')).toMatchObject({ needsAttention: false, conditions: ['paused'] })
+    })
+
     test('separates administrator, reader, and per-job reporting permissions', async () => {
         const reporting = await register()
         const other = await register('other')

@@ -10,7 +10,9 @@
     <script>
         (function () {
             try {
-                var saved = localStorage.getItem('wolfdrive-theme');
+                var saved = /^\/dashboard\/?$/i.test(window.location.pathname)
+                    ? 'dark'
+                    : localStorage.getItem('wolfdrive-theme');
                 var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 if (saved === 'dark' || (saved === 'system' && prefersDark) || (!saved && prefersDark)) {
                     document.documentElement.classList.add('dark');
