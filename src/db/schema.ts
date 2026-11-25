@@ -116,6 +116,10 @@ export const mediaFiles = sqliteTable('media_files', {
     mediaCategory: text('media_category').notNull(), // 'image' | 'video' | 'audio' | 'document' | 'other'
     /** User-assigned library category ids (JSON array), additive to the mime-derived mediaCategory. */
     customCategories: text('custom_categories', { mode: 'json' }).$type<string[]>(),
+    aiSummary: text('ai_summary'),
+    aiTags: text('ai_tags', { mode: 'json' }).$type<string[]>(),
+    aiModel: text('ai_model'),
+    aiIndexedMtimeMs: integer('ai_indexed_mtime_ms'),
     sizeBytes: integer('size_bytes').notNull(),
     mtimeMs: integer('mtime_ms').notNull(),
     indexedAt: text('indexed_at').default(sql`CURRENT_TIMESTAMP`),
@@ -169,6 +173,14 @@ export const fileTags = sqliteTable('file_tags', {
 }, (table) => [
     uniqueIndex('file_tags_file_tag_idx').on(table.fileId, table.tagId),
     index('file_tags_tag_id_idx').on(table.tagId),
+])
+
+export const directoryTags = sqliteTable('directory_tags', {
+    directoryId: text('directory_id').notNull().references(() => mediaDirectories.id, { onDelete: 'cascade' }),
+    tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+}, (table) => [
+    uniqueIndex('directory_tags_directory_tag_idx').on(table.directoryId, table.tagId),
+    index('directory_tags_tag_id_idx').on(table.tagId),
 ])
 
 // app_settings table for storing application-wide settings, such as ignore patterns, scan intervals, etc.

@@ -3,18 +3,21 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Check, ChevronDown, Tag as TagIcon, X } from 'lucide-vue-next'
 import { useTags } from '@/composables/useTags'
 
+const props = withDefaults(defineProps<{ label?: string; showCounts?: boolean; folderOnly?: boolean }>(), { label: 'Tags', showCounts: true, folderOnly: false })
 const selectedIds = defineModel<Set<string>>('selectedIds', { required: true })
 const matchMode = defineModel<'all' | 'any'>('matchMode', { required: true })
 
-const { allTags, fetchTags } = useTags()
+const { allTags, fetchTags, loadError: tagsLoadError } = useTags()
 
 const isOpen = ref(false)
 const query = ref('')
 const rootEl = ref<HTMLElement | null>(null)
+const folderTagIds = ref<Set<string>>(new Set())
+const loadError = ref('')
 
 const filteredTags = computed(() => {
     const q = query.value.trim().toLowerCase()
-    return q ? allTags.value.filter((t) => t.name.toLowerCase().includes(q)) : allTags.value
+    return allTags.value.filter((t) => (!props.folderOnly || folderTagIds.value.has(t.id)) && (!q || t.name.toLowerCase().includes(q)))
 })
 
 function toggle(id: string) {
@@ -28,9 +31,21 @@ function clearAll() {
     selectedIds.value = new Set()
 }
 
-function toggleOpen() {
+async function toggleOpen() {
     isOpen.value = !isOpen.value
-    if (isOpen.value) fetchTags()
+    if (!isOpen.value) return
+    void fetchTags()
+    if (props.folderOnly) {
+        loadError.value = ''
+        try {
+            const response = await fetch('/api/directories')
+            if (!response.ok) throw new Error('Unable to load folder tags')
+            const directories = await response.json() as { tags: { id: string }[] }[]
+            folderTagIds.value = new Set(directories.flatMap((directory) => directory.tags.map((tag) => tag.id)))
+        } catch (error) {
+            loadError.value = error instanceof Error ? error.message : 'Unable to load folder tags'
+        }
+    }
 }
 
 function handleDocumentClick(event: MouseEvent) {
@@ -60,7 +75,7 @@ onBeforeUnmount(() => {
                 : 'border-gemini-border bg-gemini-card text-gemini-subtext hover:border-gemini-subtext/40 hover:text-gemini-text'"
             :aria-expanded="isOpen" @click="toggleOpen">
             <TagIcon class="h-4 w-4" />
-            <span>Tags</span>
+            <span>{{ label }}</span>
             <span v-if="selectedIds.size"
                 class="rounded-md bg-gemini-blue/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-gemini-blue">
                 {{ selectedIds.size }}
@@ -81,6 +96,8 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="max-h-64 overflow-y-auto p-1">
+                <p v-if="loadError" role="alert" class="px-3 py-4 text-center text-xs text-gemini-text">{{ loadError }}</p>
+                <p v-if="tagsLoadError" role="alert" class="px-3 py-4 text-center text-xs text-gemini-text">{{ tagsLoadError }}</p>
                 <p v-if="!filteredTags.length" class="px-3 py-4 text-center text-xs text-gemini-subtext">
                     No tags found
                 </p>
@@ -94,7 +111,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span class="truncate">{{ tag.name }}</span>
                     </span>
-                    <span class="shrink-0 font-mono text-xs text-gemini-subtext">{{ tag.fileCount }}</span>
+                    <span v-if="showCounts" class="shrink-0 font-mono text-xs text-gemini-subtext">{{ tag.fileCount }}</span>
                 </button>
             </div>
 

@@ -73,6 +73,32 @@ bun run build
 bun run start
 ```
 
+## Storage and indexing
+
+The Compose media mount uses `MEDIA_HOST_PATH` (default `/mnt/world/Production`) as
+the host source and mounts it read-only at `/media` in the container. Set
+`MEDIA_HOST_PATH` in the Compose environment or `.env` to change the source.
+Storage settings display both paths; monitored folders must use paths visible to
+the server, such as `/media/photos`. The host path is informational and does not
+restrict which server paths can be registered. For non-Compose deployments,
+`MEDIA_HOST_PATH` and `MEDIA_CONTAINER_PATH` are optional display labels.
+
+Monitored folders can have multiple tags, using the same tag names as file tags
+but with separate assignments and filters. A file belongs to its indexed
+directory; avoid overlapping monitored folders when folder-tag filtering matters.
+File search also searches stored AI summaries and AI tags, but generation is not
+implemented yet. Changes detected by a scan clear outdated AI metadata.
+
+Automatic rescanning is disabled until enabled in Storage & Indexing. The global
+interval is entered in hours (minimum one minute, maximum 365 days) and stored
+in seconds; it is intended to be shared with future AI processing. The first run
+is due after one interval; subsequent runs are due one interval after the
+previous attempt finishes. A missed run starts after the server restarts, and a
+failed attempt is reported in settings and retried at the next interval. This is
+an elapsed interval, not a calendar-time schedule. Manual and automatic scans
+are serialized within the server process; do not run additional WolfDrive
+servers or separate scan scripts against the same database concurrently.
+
 Project Structure
 wolfdrive/
 ├── drizzle/           # Auto-generated SQL migrations

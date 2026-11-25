@@ -134,6 +134,13 @@
       "when": 1795292543069,
       "tag": "0018_exotic_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795574878505,
+      "tag": "0019_jittery_inertia",
+      "breakpoints": true
     }
   ]
 }

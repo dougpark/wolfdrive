@@ -9,20 +9,22 @@ export interface TagWithCount extends Tag {
 const allTags = ref<TagWithCount[]>([])
 const isLoaded = ref(false)
 const isLoading = ref(false)
+const loadError = ref('')
 
 export function useTags() {
     async function fetchTags(force = false) {
         if (isLoading.value) return
         if (isLoaded.value && !force) return
         isLoading.value = true
+        loadError.value = ''
         try {
             const res = await fetch('/api/tags')
-            if (res.ok) {
-                allTags.value = await res.json()
-                isLoaded.value = true
-            }
+            if (!res.ok) throw new Error(`Tag request failed: ${res.status}`)
+            allTags.value = await res.json()
+            isLoaded.value = true
         } catch (err) {
             console.error('Failed to load tags:', err)
+            loadError.value = 'Unable to load tags.'
         } finally {
             isLoading.value = false
         }
@@ -82,6 +84,7 @@ export function useTags() {
     return {
         allTags,
         isLoading,
+        loadError,
         fetchTags,
         createTag,
         renameTag,

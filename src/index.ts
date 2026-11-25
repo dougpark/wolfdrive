@@ -12,9 +12,11 @@ import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
 import { createStatusApi } from './services/statusApi'
+import { createScanScheduler } from './services/scanScheduler'
 import {
     tags,
     fileTags,
+    directoryTags,
     projects,
     researchAddresses,
     researchDeeds,
@@ -119,6 +121,7 @@ type Env = {
 
 // Instantiate Hono with the custom Env type
 const app = new Hono<Env>()
+const scanScheduler = createScanScheduler(db, () => scanAllUserDirectories('usr_default'))
 
 // Middleware inside Hono
 app.use('/api/*', async (c, next) => {
@@ -204,6 +207,13 @@ app.get('/api/directories', async (c) => {
         .groupBy(mediaFiles.directoryId, mediaFiles.mediaCategory)
 
     // 3. Map aggregated stats into directory objects
+    const folderTags = await db.select({
+        directoryId: directoryTags.directoryId, id: tags.id, name: tags.name, color: tags.color,
+    }).from(directoryTags)
+        .innerJoin(mediaDirectories, eq(directoryTags.directoryId, mediaDirectories.id))
+        .innerJoin(tags, eq(directoryTags.tagId, tags.id))
+        .where(and(eq(mediaDirectories.userId, userId), eq(tags.userId, userId)))
+
     const result = dirs.map((dir) => {
         const dirStats = stats.filter((s) => s.directoryId === dir.id)
         const breakdown = dirStats.reduce((acc, row) => {
@@ -217,20 +227,52 @@ app.get('/api/directories', async (c) => {
             ...dir,
             totalFiles,
             breakdown,
+            tags: folderTags.filter((tag) => tag.directoryId === dir.id)
+                .map(({ id, name, color }) => ({ id, name, color })),
         }
     })
 
     return c.json(result)
 })
 
+app.put('/api/directories/:id/tags', async (c) => {
+    const userId = c.get('userId')
+    const directoryId = c.req.param('id')
+    const body = await c.req.json<{ tagIds?: unknown }>()
+    if (!Array.isArray(body.tagIds) || body.tagIds.some((id) => typeof id !== 'string' || !id)) {
+        return c.json({ error: 'tagIds must be an array of tag ids' }, 400)
+    }
+    const requestedIds: string[] = [...new Set<string>(body.tagIds)]
+    const [directory] = await db.select({ id: mediaDirectories.id }).from(mediaDirectories)
+        .where(and(eq(mediaDirectories.id, directoryId), eq(mediaDirectories.userId, userId))).limit(1)
+    if (!directory) return c.json({ error: 'Directory not found' }, 404)
+    const owned = requestedIds.length
+        ? await db.select({ id: tags.id }).from(tags).where(and(eq(tags.userId, userId), inArray(tags.id, requestedIds)))
+        : []
+    if (owned.length !== requestedIds.length) return c.json({ error: 'Unknown tag id' }, 400)
+    db.transaction((tx) => {
+        tx.delete(directoryTags).where(eq(directoryTags.directoryId, directoryId)).run()
+        for (const tagId of requestedIds) tx.insert(directoryTags).values({ directoryId, tagId }).run()
+    })
+    return c.json({ success: true })
+})
+
 // POST /api/directories - Register a new directory
 app.post('/api/directories', async (c) => {
     const userId = c.get('userId')
-    const { path, label } = await c.req.json<{ path: string; label?: string }>()
+    const { path, label, tagIds = [] } = await c.req.json<{ path: string; label?: string; tagIds?: string[] }>()
 
     if (!path || !path.trim()) {
         return c.json({ error: 'Directory path is required' }, 400)
     }
+    if (!Array.isArray(tagIds) || tagIds.some((id) => typeof id !== 'string' || !id)) {
+        return c.json({ error: 'tagIds must be an array of tag ids' }, 400)
+    }
+    const uniqueIds = [...new Set(tagIds)]
+    const owned = uniqueIds.length
+        ? await db.select({ id: tags.id }).from(tags).where(and(eq(tags.userId, userId), inArray(tags.id, uniqueIds)))
+        : []
+    if (owned.length !== uniqueIds.length) return c.json({ error: 'Unknown tag id' }, 400)
 
     const newDir = {
         id: `dir_${crypto.randomUUID().slice(0, 8)}`,
@@ -240,7 +282,10 @@ app.post('/api/directories', async (c) => {
         enabled: true,
     }
 
-    await db.insert(mediaDirectories).values(newDir)
+    db.transaction((tx) => {
+        tx.insert(mediaDirectories).values(newDir).run()
+        for (const tagId of uniqueIds) tx.insert(directoryTags).values({ directoryId: newDir.id, tagId }).run()
+    })
     return c.json(newDir, 201)
 })
 
@@ -249,9 +294,13 @@ app.delete('/api/directories/:id', async (c) => {
     const userId = c.get('userId')
     const id = c.req.param('id')
 
-    await db.delete(mediaDirectories).where(
-        and(eq(mediaDirectories.id, id), eq(mediaDirectories.userId, userId))
-    )
+    const [directory] = await db.select({ id: mediaDirectories.id }).from(mediaDirectories)
+        .where(and(eq(mediaDirectories.id, id), eq(mediaDirectories.userId, userId))).limit(1)
+    if (!directory) return c.json({ error: 'Directory not found' }, 404)
+    db.transaction((tx) => {
+        tx.delete(directoryTags).where(eq(directoryTags.directoryId, id)).run()
+        tx.delete(mediaDirectories).where(and(eq(mediaDirectories.id, id), eq(mediaDirectories.userId, userId))).run()
+    })
 
     return c.json({ success: true })
 })
@@ -259,15 +308,35 @@ app.delete('/api/directories/:id', async (c) => {
 // POST /api/scan - Scan all user directories
 app.post('/api/scan', async (c) => {
     const userId = c.get('userId')
-    const stats = await scanAllUserDirectories(userId)
-    return c.json({ success: true, ...stats })
+    const run = await scanScheduler.run(() => scanAllUserDirectories(userId))
+    if (!run.started) return c.json({ error: 'A scan is already running' }, 409)
+    return c.json({ success: true, ...run.result })
 })
 
 // POST /api/scan/:id - Scan a specific directory
 app.post('/api/scan/:id', async (c) => {
     const dirId = c.req.param('id')
-    const stats = await scanDirectory(dirId)
-    return c.json({ success: true, ...stats })
+    const [directory] = await db.select({ id: mediaDirectories.id }).from(mediaDirectories)
+        .where(and(eq(mediaDirectories.id, dirId), eq(mediaDirectories.userId, c.get('userId')))).limit(1)
+    if (!directory) return c.json({ error: 'Directory not found' }, 404)
+    const run = await scanScheduler.run(() => scanDirectory(dirId))
+    if (!run.started) return c.json({ error: 'A scan is already running' }, 409)
+    return c.json({ success: true, ...run.result })
+})
+
+app.get('/api/settings/storage', (c) => c.json({
+    hostPath: process.env.MEDIA_HOST_PATH || null,
+    containerPath: process.env.MEDIA_CONTAINER_PATH || null,
+    schedule: scanScheduler.getSchedule(),
+}))
+
+app.put('/api/settings/scan-schedule', async (c) => {
+    const body = await c.req.json<{ intervalSeconds?: unknown }>()
+    const interval = body.intervalSeconds
+    if (interval !== null && (typeof interval !== 'number' || !Number.isSafeInteger(interval) || interval < 60 || interval > 31536000)) {
+        return c.json({ error: 'Interval must be null or between 60 and 31536000 seconds' }, 400)
+    }
+    return c.json(scanScheduler.configure(interval))
 })
 
 /** Normalizes a tag name into a case/whitespace-insensitive lookup key. */
@@ -340,6 +409,7 @@ app.get('/api/files', async (c) => {
         .filter(Boolean)
     // 'all' (AND, default) requires every tag; 'any' (OR) requires at least one
     const tagMode = c.req.query('tagMode') === 'any' ? 'any' : 'all'
+    const requestedFolderTags = (c.req.query('folderTags') ?? '').split(',').map((value) => value.trim()).filter(Boolean)
 
     let conditions = [eq(mediaFiles.userId, userId)]
 
@@ -379,9 +449,19 @@ app.get('/api/files', async (c) => {
             like(mediaFiles.filename, searchPattern),
             like(mediaFiles.relativePath, searchPattern),
             like(mediaFiles.path, searchPattern),
+            like(mediaFiles.aiSummary, searchPattern),
+            sql`EXISTS (SELECT 1 FROM json_each(${mediaFiles.aiTags}) WHERE json_each.value LIKE ${searchPattern})`,
         )
 
         if (searchCondition) conditions.push(searchCondition)
+    }
+
+    if (requestedFolderTags.length && c.req.query('folderTagMode') === 'any') {
+        conditions.push(sql`EXISTS (SELECT 1 FROM ${directoryTags} WHERE ${directoryTags.directoryId} = ${mediaFiles.directoryId} AND ${directoryTags.tagId} IN ${requestedFolderTags})`)
+    } else {
+        for (const tagId of requestedFolderTags) {
+            conditions.push(sql`EXISTS (SELECT 1 FROM ${directoryTags} WHERE ${directoryTags.directoryId} = ${mediaFiles.directoryId} AND ${directoryTags.tagId} = ${tagId})`)
+        }
     }
 
     if (requestedTagIds.length > 0) {
@@ -626,14 +706,15 @@ app.delete('/api/tags/:id', async (c) => {
     const userId = c.get('userId')
     const id = c.req.param('id')
 
-    const [deleted] = await db
-        .delete(tags)
-        .where(and(eq(tags.id, id), eq(tags.userId, userId)))
-        .returning()
-
-    if (!deleted) {
+    const [tag] = await db.select({ id: tags.id }).from(tags)
+        .where(and(eq(tags.id, id), eq(tags.userId, userId))).limit(1)
+    if (!tag) {
         return c.json({ error: 'Tag not found' }, 404)
     }
+    db.transaction((tx) => {
+        tx.delete(directoryTags).where(eq(directoryTags.tagId, id)).run()
+        tx.delete(tags).where(and(eq(tags.id, id), eq(tags.userId, userId))).run()
+    })
     return c.json({ success: true })
 })
 
@@ -1460,6 +1541,13 @@ const statusSweepTimer = setInterval(() => {
     }
 }, 60000)
 statusSweepTimer.unref()
+
+function runScheduledScan() {
+    void scanScheduler.tick().catch((error) => console.error('Scan scheduler failed:', error))
+}
+runScheduledScan()
+const scanTimer = setInterval(runScheduledScan, 10000)
+scanTimer.unref()
 
 // Serve Static Frontend Assets (JS, CSS, images from Vite build)
 app.use('/dashboard', async (c, next) => {

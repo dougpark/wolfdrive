@@ -60,6 +60,8 @@ const searchQuery = ref('')
 const selectedFilter = ref<string>('all')
 const selectedTagIds = ref<Set<string>>(new Set())
 const tagMatchMode = ref<'all' | 'any'>('all')
+const selectedFolderTagIds = ref<Set<string>>(new Set())
+const folderTagMatchMode = ref<'all' | 'any'>('all')
 const viewMode = ref<'grid' | 'list'>('list')
 const sortKey = ref<SortKey>('modified')
 const sortDirection = ref<'asc' | 'desc'>('desc')
@@ -180,6 +182,10 @@ async function fetchFiles() {
             params.append('tags', [...scopedTagIds].join(','))
             params.append('tagMode', tagMatchMode.value)
         }
+        if (selectedFolderTagIds.value.size) {
+            params.append('folderTags', [...selectedFolderTagIds.value].join(','))
+            params.append('folderTagMode', folderTagMatchMode.value)
+        }
         params.append('sort', sortKey.value)
         params.append('dir', sortDirection.value)
         params.append('limit', '1000')
@@ -274,6 +280,10 @@ watch(() => props.scopeTagIds, () => {
 
 watch(selectedFilter, fetchFiles)
 watch(selectedTagIds, fetchFiles, { deep: true })
+watch(selectedFolderTagIds, fetchFiles, { deep: true })
+watch(folderTagMatchMode, () => {
+    if (selectedFolderTagIds.value.size) fetchFiles()
+})
 watch(tagMatchMode, () => {
     if (selectedTagIds.value.size) fetchFiles()
 })
@@ -443,6 +453,8 @@ onBeforeUnmount(() => {
                         <div class="flex items-center gap-2 self-end sm:self-auto">
                             <TagFilterDropdown v-model:selected-ids="selectedTagIds"
                                 v-model:match-mode="tagMatchMode" />
+                            <TagFilterDropdown v-model:selected-ids="selectedFolderTagIds"
+                                v-model:match-mode="folderTagMatchMode" label="Folder tags" :show-counts="false" folder-only />
 
                             <div
                                 class="flex items-center gap-1 bg-gemini-card border border-gemini-border rounded-xl p-1">

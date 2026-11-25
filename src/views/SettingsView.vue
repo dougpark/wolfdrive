@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import {
   Palette,
@@ -13,6 +13,10 @@ import {
 } from 'lucide-vue-next'
 import { FolderPlus, Trash2, Folder, RefreshCw } from 'lucide-vue-next'
 import { FileCode, Save } from 'lucide-vue-next'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseInput from '@/components/ui/BaseInput.vue'
+import FolderTagEditor from '@/components/common/FolderTagEditor.vue'
+import type { Tag } from '@/types/media'
 
 const { selectedTheme, applyTheme, initTheme } = useTheme()
 
@@ -80,6 +84,80 @@ interface MediaDirectory {
   lastScannedAt: string | null
   totalFiles?: number
   breakdown?: Record<string, number>
+  tags: Tag[]
+}
+
+interface ScanSchedule {
+  intervalSeconds: number | null
+  nextRunAt: string | null
+  lastRunAt: string | null
+  lastError: string | null
+}
+
+const storagePaths = ref<{ hostPath: string | null; containerPath: string | null }>({ hostPath: null, containerPath: null })
+const schedule = ref<ScanSchedule | null>(null)
+const intervalHours = ref('1')
+const storageError = ref('')
+const savingSchedule = ref(false)
+const editingDirectory = ref<string | null>(null)
+const editedTags = ref<Tag[]>([])
+const newTags = ref<Tag[]>([])
+
+async function fetchStorageSettings(updateInterval = true) {
+  try {
+    const res = await fetch('/api/settings/storage')
+    if (!res.ok) throw new Error('Unable to load storage settings')
+    const data = await res.json() as { hostPath: string | null; containerPath: string | null; schedule: ScanSchedule }
+    storagePaths.value = { hostPath: data.hostPath, containerPath: data.containerPath }
+    const previousRun = schedule.value?.lastRunAt
+    schedule.value = data.schedule
+    if (updateInterval && data.schedule.intervalSeconds !== null) intervalHours.value = String(data.schedule.intervalSeconds / 3600)
+    if (!updateInterval && data.schedule.lastRunAt !== previousRun) await fetchDirectories()
+  } catch (error) {
+    storageError.value = error instanceof Error ? error.message : 'Unable to load storage settings'
+  }
+}
+
+async function saveSchedule(enabled: boolean) {
+  const seconds = enabled ? Number(intervalHours.value) * 3600 : null
+  if (seconds !== null && (!Number.isFinite(seconds) || Math.round(seconds) < 60 || Math.round(seconds) > 31536000)) {
+    storageError.value = 'Enter an interval between one minute and 365 days.'
+    return
+  }
+  storageError.value = ''
+  savingSchedule.value = true
+  try {
+    const res = await fetch('/api/settings/scan-schedule', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intervalSeconds: seconds === null ? null : Math.round(seconds) }),
+    })
+    if (!res.ok) throw new Error('Unable to save rescan schedule')
+    schedule.value = await res.json()
+  } catch (error) {
+    storageError.value = error instanceof Error ? error.message : 'Unable to save rescan schedule'
+  } finally {
+    savingSchedule.value = false
+  }
+}
+
+function editTags(dir: MediaDirectory) {
+  editingDirectory.value = dir.id
+  editedTags.value = [...dir.tags]
+}
+
+async function saveFolderTags(id: string) {
+  storageError.value = ''
+  try {
+    const res = await fetch(`/api/directories/${encodeURIComponent(id)}/tags`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagIds: editedTags.value.map((tag) => tag.id) }),
+    })
+    if (!res.ok) throw new Error('Unable to save folder tags')
+    editingDirectory.value = null
+    await fetchDirectories()
+  } catch (error) {
+    storageError.value = error instanceof Error ? error.message : 'Unable to save folder tags'
+  }
 }
 
 // Category labels for badges
@@ -103,36 +181,48 @@ const isScanningAll = ref(false)
 async function fetchDirectories() {
   try {
     const res = await fetch('/api/directories')
+    if (!res.ok) throw new Error('Unable to load monitored folders')
     directories.value = await res.json()
   } catch (err) {
     console.error('Failed to load directories', err)
+    storageError.value = 'Unable to load monitored folders.'
   }
 }
 
 async function addDirectory() {
   if (!newPath.value.trim()) return
   isLoading.value = true
+  storageError.value = ''
 
   try {
     const res = await fetch('/api/directories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: newPath.value, label: newLabel.value })
+      body: JSON.stringify({ path: newPath.value, label: newLabel.value, tagIds: newTags.value.map((tag) => tag.id) })
     })
 
     if (res.ok) {
       newPath.value = ''
       newLabel.value = ''
+      newTags.value = []
       await fetchDirectories()
-    }
+    } else throw new Error('Unable to add monitored folder')
+  } catch (error) {
+    storageError.value = error instanceof Error ? error.message : 'Unable to add monitored folder'
   } finally {
     isLoading.value = false
   }
 }
 
 async function removeDirectory(id: string) {
-  await fetch('/api/directories/' + id, { method: 'DELETE' })
-  await fetchDirectories()
+  storageError.value = ''
+  try {
+    const res = await fetch('/api/directories/' + encodeURIComponent(id), { method: 'DELETE' })
+    if (!res.ok) throw new Error('Unable to remove monitored folder')
+    await fetchDirectories()
+  } catch (error) {
+    storageError.value = error instanceof Error ? error.message : 'Unable to remove monitored folder'
+  }
 }
 
 // Scan all user directories
@@ -142,11 +232,13 @@ async function triggerScanAll() {
 
   try {
     const res = await fetch('/api/scan', { method: 'POST' })
+    if (!res.ok) throw new Error(`Scan failed (${res.status})`)
     const data = await res.json()
     console.log(`Scan completed: ${data.totalIndexed} indexed, ${data.totalSkipped} skipped, ${data.totalPruned} stale entries removed.`)
     await fetchDirectories()
   } catch (err) {
     console.error('Scan failed', err)
+    storageError.value = err instanceof Error ? err.message : 'Scan failed'
   } finally {
     isScanningAll.value = false
   }
@@ -158,10 +250,12 @@ async function triggerSingleScan(id: string) {
   isScanning.value[id] = true
 
   try {
-    await fetch(`/api/scan/${id}`, { method: 'POST' })
+    const res = await fetch(`/api/scan/${id}`, { method: 'POST' })
+    if (!res.ok) throw new Error(`Scan failed (${res.status})`)
     await fetchDirectories()
   } catch (err) {
     console.error('Directory scan failed', err)
+    storageError.value = err instanceof Error ? err.message : 'Directory scan failed'
   } finally {
     isScanning.value[id] = false
   }
@@ -172,9 +266,15 @@ function formatDate(isoStr: string | null) {
   return new Date(isoStr).toLocaleString()
 }
 
+let storageTimer: ReturnType<typeof setInterval>
 onMounted(() => {
   fetchDirectories()
+  fetchStorageSettings()
+  storageTimer = setInterval(() => {
+    if (activeCategory.value === 'storage' && !savingSchedule.value) void fetchStorageSettings(false)
+  }, 15000)
 })
+onBeforeUnmount(() => clearInterval(storageTimer))
 </script>
 
 <template>
@@ -321,6 +421,29 @@ onMounted(() => {
 
               <hr class="border-gemini-border" />
 
+              <p v-if="storageError" role="alert" class="text-sm text-gemini-text">{{ storageError }}</p>
+              <div class="bg-gemini-surface p-4 rounded-xl space-y-1 text-sm">
+                <p>Host storage path (informational): <span class="font-mono">{{ storagePaths.hostPath || 'Not configured' }}</span></p>
+                <p>Container storage path: <span class="font-mono">{{ storagePaths.containerPath || 'Not configured' }}</span></p>
+                <p class="text-gemini-subtext">Enter paths visible to the WolfDrive server, such as the container path above.</p>
+              </div>
+
+              <div class="bg-gemini-surface p-4 rounded-xl space-y-3">
+                <h3 class="text-sm font-semibold">Automatic rescans</h3>
+                <p class="text-sm text-gemini-subtext">A global elapsed interval for rescans and future AI processing. AI generation is not yet available.</p>
+                <div class="flex flex-wrap items-center gap-2">
+                  <label for="scan-hours" class="text-sm">Interval in hours</label>
+                  <BaseInput id="scan-hours" v-model="intervalHours" type="number" min="0" step="any" class="max-w-32" />
+                  <BaseButton variant="primary" :disabled="savingSchedule || !schedule" @click="saveSchedule(true)">Save and enable</BaseButton>
+                  <BaseButton :disabled="savingSchedule || !schedule || schedule.intervalSeconds === null" @click="saveSchedule(false)">Disable</BaseButton>
+                </div>
+                <p class="text-sm text-gemini-subtext">
+                  {{ schedule?.nextRunAt ? `Next scan: ${formatDate(schedule.nextRunAt)}` : 'Automatic rescans are disabled.' }}
+                </p>
+                <p v-if="schedule?.lastRunAt" class="text-sm text-gemini-subtext">Last scheduled attempt: {{ formatDate(schedule.lastRunAt) }}</p>
+                <p v-if="schedule?.lastError" role="alert" class="text-sm text-gemini-text">Last scheduled scan failed: {{ schedule.lastError }}</p>
+              </div>
+
               <!-- Add Directory Form -->
               <form @submit.prevent="addDirectory"
                 class="bg-gemini-surface p-4 rounded-2xl border border-gemini-border space-y-4">
@@ -340,6 +463,7 @@ onMounted(() => {
                     Add Path
                   </button>
                 </div>
+                <FolderTagEditor v-model="newTags" />
               </form>
 
               <!-- Add inside Storage category panel in SettingsView.vue -->
@@ -415,6 +539,18 @@ onMounted(() => {
                         <Trash2 class="h-4 w-4" />
                       </button>
                     </div>
+                  </div>
+
+                  <div class="space-y-2 border-t border-gemini-border pt-3">
+                    <p class="text-sm text-gemini-subtext">Folder tags: {{ dir.tags.map((tag) => tag.name).join(', ') || 'None' }}</p>
+                    <template v-if="editingDirectory === dir.id">
+                      <FolderTagEditor v-model="editedTags" />
+                      <div class="flex gap-2">
+                        <BaseButton variant="primary" @click="saveFolderTags(dir.id)">Save tags</BaseButton>
+                        <BaseButton @click="editingDirectory = null">Cancel</BaseButton>
+                      </div>
+                    </template>
+                    <BaseButton v-else @click="editTags(dir)">Edit folder tags</BaseButton>
                   </div>
 
                   <!-- Bottom Row: Category Badges Breakdown -->

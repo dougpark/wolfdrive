@@ -8,6 +8,7 @@ data
 *.csv
 *.json
 !drizzle/meta/0018_snapshot.json
+!drizzle/meta/0019_snapshot.json
 data-research/
 
 # output

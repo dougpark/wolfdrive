@@ -130,6 +130,10 @@ export async function scanDirectory(directoryId: string): Promise<{ indexed: num
                         mimeType,
                         mediaCategory: category,
                         indexedAt: new Date().toISOString(),
+                        aiSummary: null,
+                        aiTags: null,
+                        aiModel: null,
+                        aiIndexedMtimeMs: null,
                     },
                 })
 
