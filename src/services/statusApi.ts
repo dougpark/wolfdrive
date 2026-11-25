@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { statusEvents, statusJobs, statusRuns } from '../db/schema'
 import type { DashboardSummary, StatusJobPage } from '../types/status'
-import { hashToken, ingestStatusEvent, newReportingToken, statusRunDetail, summarizeStatusJob, sweepStatusRetention, tokenMatches } from './statusServer'
+import { hashToken, ingestStatusEvent, markStatusRunFailed, newReportingToken, statusRunDetail, summarizeStatusJob, sweepStatusRetention, tokenMatches } from './statusServer'
 import type { StatusDatabase } from './statusServer'
 import { MAX_EVENT_BYTES, StatusError, validateEvent, validateJobConfig, validateJobId } from './statusValidation'
 
@@ -223,6 +223,16 @@ export function createStatusApi(database: StatusDatabase, options: StatusOptions
         }).from(statusEvents).where(where).orderBy(asc(statusEvents.sequence)).limit(page.limit).offset(page.offset).all()
         const total = database.select({ count: sql<number>`count(*)` }).from(statusEvents).where(where).get()?.count ?? 0
         return c.json({ run: statusRunDetail(run), events: { ...page, items, total } })
+    })
+    app.post('/jobs/:jobId/runs/:runId/fail', async c => {
+        const body = await json(c.req)
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+            Object.keys(body).some(key => key !== 'reason') || !('reason' in body) ||
+            typeof body.reason !== 'string' || !body.reason.trim() || body.reason.length > 1024) {
+            throw new StatusError('A reason of 1-1024 characters is required')
+        }
+        const run = markStatusRunFailed(database, c.req.param('jobId'), c.req.param('runId'), body.reason.trim(), now())
+        return c.json({ run })
     })
     app.notFound(c => c.json({ error: 'Unknown status endpoint' }, 404))
     return { app, sweep }

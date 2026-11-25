@@ -72,7 +72,10 @@ function save() {
                 <label class="block text-sm">{{ mode === 'heartbeat' ? 'Heartbeat expiry (seconds, required)' : 'Active-run heartbeat expiry (seconds, optional)' }}
                     <BaseInput v-model="heartbeat" type="number" min="1" max="31536000" :required="mode === 'heartbeat'" />
                 </label>
-                <label v-if="mode !== 'heartbeat'" class="block text-sm">Maximum runtime (seconds, optional)<BaseInput v-model="runtime" type="number" min="1" max="31536000" /></label>
+                <template v-if="mode !== 'heartbeat'">
+                    <label class="block text-sm">Maximum runtime warning (seconds, optional)<BaseInput v-model="runtime" type="number" min="1" max="31536000" /></label>
+                    <p class="text-xs leading-relaxed text-gemini-subtext">Exceeding this limit marks a run overdue, not failed. Leave blank for unlimited runtime. Interrupted runs can be marked failed manually.</p>
+                </template>
                 <p v-if="localError || error" role="alert" class="text-sm text-gemini-purple">{{ localError || error }}</p>
                 <div class="flex justify-end gap-2">
                     <BaseButton :disabled="busy" @click="emit('close')">Cancel</BaseButton>

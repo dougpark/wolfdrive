@@ -222,6 +222,35 @@ export function summarizeStatusJob(database: StatusDatabase, job: Job, now = Dat
 
 export function statusRunDetail(run: Run): StatusRun { return asRun(run) }
 
+export function markStatusRunFailed(database: StatusDatabase, jobId: string, runId: string, reason: string, now = Date.now()): StatusRun {
+    return database.transaction(tx => {
+        const job = tx.select().from(statusJobs).where(eq(statusJobs.id, jobId)).get()
+        if (!job) throw new StatusError('Unknown status job', 404)
+        const run = tx.select().from(statusRuns).where(and(eq(statusRuns.jobId, jobId), eq(statusRuns.id, runId))).get()
+        if (!run) throw new StatusError('Unknown run', 404)
+        if (run.outcome !== 'running' || run.terminalSequence !== null) {
+            throw new StatusError('Run is already finished; refresh its status', 409)
+        }
+        if (run.lastSequence >= Number.MAX_SAFE_INTEGER) throw new StatusError('Run sequence limit reached', 409)
+        ingestStatusEvent(database, job, {
+            eventId: crypto.randomUUID(),
+            runId,
+            sequence: run.lastSequence + 1,
+            type: 'completed',
+            outcome: 'failed',
+            occurredAt: new Date(now).toISOString(),
+            rawStatus: 'manually_failed',
+            message: reason,
+            metadata: { resolvedBy: 'admin', reason },
+        }, now)
+        // An administrator resolving history is not a producer liveness report.
+        tx.update(statusJobs).set({ lastSeenAt: job.lastSeenAt }).where(eq(statusJobs.id, jobId)).run()
+        const finished = tx.select().from(statusRuns).where(eq(statusRuns.key, run.key)).get()
+        if (!finished) throw new Error('Resolved run could not be read')
+        return asRun(finished)
+    })
+}
+
 export function sweepStatusRetention(database: StatusDatabase, now = Date.now()): void {
     database.transaction(tx => {
         // Compact identity tombstones deliberately survive payload/run retention.

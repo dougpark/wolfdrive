@@ -318,6 +318,7 @@ Keep the server on localhost or a firewalled LAN, use HTTPS when credentials cro
 - **Scheduled:** choose the first expected start using the local date-and-time picker; its timezone is your browser's timezone, displayed beneath the field. For a nightly backup, select tomorrow at 2:00 AM and use an interval of `86400`. The API still uses positive `intervalSeconds`, millisecond Unix `anchorAt`, and `graceSeconds` (default 300). Existing anchors display in local time and remain unchanged when saving unrelated edits. Invalid/nonexistent daylight-saving times are rejected; a newly selected repeated local hour uses its earlier occurrence. Intervals are elapsed time, not timezone-aware calendar scheduling, so a 24-hour interval does not stay at the same local hour through daylight-saving changes. Manual runs do not reset the schedule.
 - **Heartbeat:** positive `heartbeatSeconds`; service reports must include a fresh `occurredAt`. An explicit `health: healthy` is required to establish healthy service status.
 - Optional `maxRuntimeSeconds` and active-run `heartbeatSeconds` track unresolved executions.
+- Maximum runtime is a warning, not automatic failure: overdue runs remain active until a producer reports completion or an administrator marks them failed. Leave it blank for jobs that legitimately run indefinitely.
 - Pause/archive suppress attention conditions while keeping reports and history. Resuming uses the original schedule: missed occurrences during a pause can become visible again. Change the anchor/schedule to start a new monitoring epoch if maintenance should establish a fresh baseline.
 
 Without `scheduledFor`, a start matches the interval slot containing its producer timestamp (or server receipt time when absent): `[due, due + interval)`. With `scheduledFor`, it matches that exact due occurrence. Multiple runs/retries for the same occurrence satisfy it only once. Completion-only runs retain an unknown start/duration and do not satisfy an expected start.
@@ -387,6 +388,17 @@ All endpoints are under `/api/status/v1`. Event ingestion accepts only the job's
 - `POST /jobs/:jobId/events`: report lifecycle/progress/log/heartbeat.
 - `GET /jobs/:jobId/runs?limit=20&offset=0`
 - `GET /jobs/:jobId/runs/:runId?limit=50&offset=0`: run plus event page.
+- `POST /jobs/:jobId/runs/:runId/fail`: admin-only manual failure with `{ "reason": "Interrupted during restart" }`.
+
+### Closing interrupted runs
+
+If a task stops without reporting completion (for example a reboot, forced termination, or interrupted script), its run remains active. A later execution gets a different run ID and does not close the old record.
+
+In **Homelab Status**, each active run now shows its start time and run ID with a **Mark failed** button. The same action is available in run history and the run timeline. Confirm that the underlying task has stopped, supply a reason, and choose **Confirm failed**. Only that run is closed; other active/completed runs and the original start/history remain unchanged.
+
+The server records an audited completion event with `outcome: failed`, `rawStatus: manually_failed`, and the administrator's reason. Its finish time means when the record was resolved, not when the unknown underlying interruption happened. No process is killed and no exit code is invented. Producer liveness/last-seen time is not refreshed by this action. A run already completed returns `409` rather than having its outcome overwritten; later producer completion reports for a manually closed run also return `409`.
+
+For long-running tasks, leave maximum runtime blank or choose a generously sized per-job warning threshold. There is no automatic timeout-to-failure in this version; this avoids declaring healthy long work failed. Existing `overdue`/`stale` warnings help identify runs to inspect and resolve manually.
 
 Pagination accepts limits 1-100. Reporting has a 120-request burst with two requests/second refill per job, a 64 KiB request maximum, 16 KiB log maximum, and 16 KiB combined metrics/metadata maximum. JSON nesting/field counts and string sizes are bounded.
 

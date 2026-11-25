@@ -61,6 +61,73 @@ async function summaries() {
 }
 
 describe('universal status API', () => {
+    test('admin can close one interrupted run with an audited failure while preserving other runs and liveness', async () => {
+        const reporting = await register()
+        const interrupted = crypto.randomUUID()
+        await report(reporting, event('started', interrupted, 0))
+        time += 1000
+        const other = crypto.randomUUID()
+        await report(reporting, event('started', other, 0))
+        const completed = crypto.randomUUID()
+        await report(reporting, event('completed', completed, 1, { outcome: 'succeeded' }))
+        const lastSeenAt = time
+        time += 10000
+        const response = await request(`/jobs/backup/runs/${interrupted}/fail`, 'POST', { reason: ' Interrupted during restart. ' })
+        expect(response.status).toBe(200)
+        const result = await response.json() as { run: StatusRun }
+        expect(result.run).toMatchObject({
+            outcome: 'failed', rawStatus: 'manually_failed', exitCode: null, finishedAt: time,
+            message: 'Interrupted during restart.', durationMs: 11000,
+        })
+        const job = (await summaries())[0]!
+        expect(job.activeRuns.map(run => run.id)).toEqual([other])
+        expect(job.lastRun?.id).toBe(completed)
+        expect(job.lastRun?.outcome).toBe('succeeded')
+        expect(job.lastSeenAt).toBe(lastSeenAt)
+        const detail = await (await request(`/jobs/backup/runs/${interrupted}`)).json() as { events: StatusPage<{ payload: StatusEventInput }> }
+        expect(detail.events.items[1]?.payload).toMatchObject({
+            type: 'completed', sequence: 1, outcome: 'failed',
+            metadata: { resolvedBy: 'admin', reason: 'Interrupted during restart.' },
+        })
+        expect((await request(`/jobs/backup/runs/${interrupted}/fail`, 'POST', { reason: 'Retry' })).status).toBe(409)
+        expect((await report(reporting, event('completed', interrupted, 1, { outcome: 'succeeded' }))).status).toBe(409)
+        expect((await report(reporting, event('progress', interrupted, 2))).status).toBe(409)
+        expect(database.select().from(schema.statusEvents).all()).toHaveLength(4)
+    })
+
+    test('manual resolution is admin-only and validates run identity, state, and reason', async () => {
+        const reporting = await register()
+        const id = crypto.randomUUID()
+        await report(reporting, event('started', id, 0))
+        const path = `/jobs/backup/runs/${id}/fail`
+        expect((await request(path, 'POST', { reason: 'Interrupted' }, reader)).status).toBe(403)
+        expect((await request(path, 'POST', { reason: 'Interrupted' }, reporting)).status).toBe(401)
+        expect((await request(path, 'POST', { reason: 'Interrupted' }, dashboardReader)).status).toBe(401)
+        for (const body of [{}, { reason: '' }, { reason: ' ' }, { reason: 5 }, { reason: 'x'.repeat(1025) }, { reason: 'Interrupted', outcome: 'succeeded' }]) {
+            expect((await request(path, 'POST', body)).status).toBe(400)
+        }
+        expect((await request(`/jobs/backup/runs/${crypto.randomUUID()}/fail`, 'POST', { reason: 'Interrupted' })).status).toBe(404)
+        expect((await request(`/jobs/missing/runs/${id}/fail`, 'POST', { reason: 'Interrupted' })).status).toBe(404)
+        await report(reporting, event('completed', id, 1, { outcome: 'succeeded' }))
+        expect((await request(path, 'POST', { reason: 'Interrupted' })).status).toBe(409)
+        expect((await summaries())[0]?.lastRun?.outcome).toBe('succeeded')
+    })
+
+    test('manual resolution closes an old run after schedule edits and leaves long-running jobs alone', async () => {
+        const reporting = await register()
+        const id = crypto.randomUUID()
+        await report(reporting, event('started', id, 0))
+        time += 10 * 86400000
+        expect((await summaries())[0]?.activeRuns).toHaveLength(1)
+        expect((await summaries())[0]?.conditions).not.toContain('overdue')
+        await request('/jobs/backup', 'PUT', { name: 'backup', mode: 'scheduled', intervalSeconds: 86400, anchorAt: time })
+        expect((await request(`/jobs/backup/runs/${id}/fail`, 'POST', { reason: 'Interrupted ten days ago' })).status).toBe(200)
+        const job = (await summaries())[0]!
+        expect(job.activeRuns).toHaveLength(0)
+        expect(job.lastRun?.outcome).toBe('failed')
+        expect(job.needsAttention).toBe(true)
+    })
+
     test('dashboard token grants only dashboard summaries and requires explicit configuration', async () => {
         expect((await request('/dashboard', 'GET', undefined, dashboardReader)).status).toBe(200)
         expect((await request('/dashboard', 'GET', undefined, '')).status).toBe(401)

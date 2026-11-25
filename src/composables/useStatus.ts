@@ -82,6 +82,9 @@ export function useStatus() {
     function detail(id: string, runId: string, offset = 0) {
         return request<{ run: StatusRun; events: StatusPage<StatusEventRecord> }>(`/jobs/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}?offset=${offset}&limit=50`)
     }
+    function failRun(id: string, runId: string, reason: string) {
+        return action<{ run: StatusRun }>(`/jobs/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/fail`, 'POST', { reason })
+    }
     function dispose() {
         refreshVersion++
         token.value = ''
@@ -111,5 +114,5 @@ export function useStatus() {
             storageError.value = "Could not remove the saved Status token. Clear this site's browser data to forget it."
         }
     }
-    return { token, page, error, actionError, busy, storageError, lastRefresh, refresh, request, saveJob, changeJob, rotateToken, runs, detail, connect, disconnect, dispose }
+    return { token, page, error, actionError, busy, storageError, lastRefresh, refresh, request, saveJob, changeJob, rotateToken, runs, detail, failRun, connect, disconnect, dispose }
 }

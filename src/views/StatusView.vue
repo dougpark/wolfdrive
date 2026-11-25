@@ -27,6 +27,8 @@ const events = ref<StatusPage<StatusEventRecord> | null>(null)
 const detailError = ref('')
 const detailBusy = ref(false)
 const confirmRotate = ref(false)
+const failingRun = ref<{ jobId: string; jobName: string; run: StatusRun } | null>(null)
+const failureReason = ref('')
 let timer: ReturnType<typeof setInterval>
 let debounce: ReturnType<typeof setTimeout>
 let detailVersion = 0
@@ -60,6 +62,7 @@ function disconnect() {
     selectedJob.value = null
     showEditor.value = false
     reportingToken.value = ''
+    failingRun.value = null
     status.disconnect()
 }
 function edit(job: StatusJobSummary | null) {
@@ -124,6 +127,20 @@ async function loadEvents(run: StatusRun, at = 0) {
     } finally { if (version === detailVersion) detailBusy.value = false }
 }
 function closeDetail() { detailVersion++; selectedJob.value = null; detailBusy.value = false }
+function confirmFailure(job: StatusJobSummary, run: StatusRun) {
+    closeDetail()
+    failingRun.value = { jobId: job.id, jobName: job.name, run }
+    failureReason.value = 'Run was interrupted and did not report completion.'
+    actionError.value = ''
+}
+async function failRun() {
+    const target = failingRun.value
+    if (!target) return
+    const result = await status.failRun(target.jobId, target.run.id, failureReason.value)
+    if (!result) return
+    failingRun.value = null
+    await refresh()
+}
 function visibility() { if (!document.hidden && token.value) void refresh() }
 watch([search, filter, mode, archived], () => {
     offset.value = 0
@@ -206,7 +223,9 @@ onBeforeUnmount(() => {
                     </div>
                     <div v-for="run in job.activeRuns" :key="run.id" class="rounded-xl bg-gemini-surface p-3 text-sm">
                         <p>{{ run.source ?? 'Unknown source' }}: {{ run.message ?? 'Running' }}</p>
+                        <p class="mt-1 text-xs text-gemini-subtext">Started: {{ date(run.startedAt ?? run.firstReceivedAt) }} · {{ run.id }}</p>
                         <p v-if="run.progress">{{ run.progress.current }}{{ run.progress.total ? ` / ${run.progress.total}` : '' }} {{ run.progress.unit }}</p>
+                        <BaseButton v-if="page.canManage" class="mt-2" :disabled="busy" @click="confirmFailure(job, run)">Mark failed</BaseButton>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <BaseButton @click="loadRuns(job)">Runs &amp; details</BaseButton>
@@ -222,6 +241,22 @@ onBeforeUnmount(() => {
             </div>
         </template>
         <StatusJobEditor v-if="showEditor" :job="editingJob" :busy="busy" :error="actionError" @close="showEditor = false" @save="save" />
+        <ModalShell v-if="failingRun" title="Mark interrupted run failed" @close="!busy && (failingRun = null)">
+            <template #header><h2 class="font-semibold">Mark {{ failingRun.jobName }} run failed</h2></template>
+            <template #body>
+                <form class="space-y-4" @submit.prevent="failRun">
+                    <p class="break-all text-sm">{{ failingRun.run.id }}</p>
+                    <p class="text-sm">Started: {{ date(failingRun.run.startedAt ?? failingRun.run.firstReceivedAt) }}</p>
+                    <p class="text-sm leading-relaxed">This closes only this run record. It does not stop a process. Confirm the task is no longer running before proceeding. Later completion reports for this run will be rejected.</p>
+                    <label class="block text-sm">Reason<BaseInput v-model="failureReason" required maxlength="1024" :disabled="busy" /></label>
+                    <p v-if="actionError" role="alert" class="text-sm text-gemini-purple">{{ actionError }}</p>
+                    <div class="flex justify-end gap-2">
+                        <BaseButton :disabled="busy" @click="failingRun = null">Cancel</BaseButton>
+                        <BaseButton type="submit" variant="primary" :disabled="busy || !failureReason.trim()">{{ busy ? 'Saving...' : 'Confirm failed' }}</BaseButton>
+                    </div>
+                </form>
+            </template>
+        </ModalShell>
         <ModalShell v-if="reportingToken" title="Save reporting token" @close="reportingToken = ''">
             <template #header><h2 class="font-semibold">Save token for {{ reportingJobId }}</h2></template>
             <template #body>
@@ -247,6 +282,7 @@ onBeforeUnmount(() => {
                     <div v-for="run in runPage.items" :key="run.id" class="mb-3 space-y-2 rounded-xl border border-gemini-border p-4">
                         <p class="text-sm">{{ run.outcome }} · {{ date(run.startedAt) }} · {{ duration(run) }}</p><p class="break-all text-xs text-gemini-subtext">{{ run.id }} · {{ run.source }}</p>
                         <BaseButton @click="loadEvents(run)">Open timeline</BaseButton>
+                        <BaseButton v-if="page?.canManage && run.outcome === 'running'" :disabled="busy" @click="confirmFailure(selectedJob, run)">Mark failed</BaseButton>
                     </div>
                     <div class="flex gap-2">
                         <BaseButton :disabled="detailBusy || runPage.offset === 0" @click="loadRuns(selectedJob, Math.max(0, runPage.offset - 20))">Previous runs</BaseButton>
@@ -258,6 +294,7 @@ onBeforeUnmount(() => {
                     <BaseButton class="mb-4" @click="loadRuns(selectedJob)">Back to runs</BaseButton>
                     <p class="text-sm">{{ selectedRun.outcome }} · {{ duration(selectedRun) }} · Exit code: {{ selectedRun.exitCode ?? 'Not reported' }}</p>
                     <p class="mb-4 text-sm">{{ selectedRun.message }}</p>
+                    <BaseButton v-if="page?.canManage && selectedRun.outcome === 'running'" class="mb-4" :disabled="busy" @click="confirmFailure(selectedJob, selectedRun)">Mark failed</BaseButton>
                     <pre v-if="selectedRun.metrics" class="mb-4 overflow-x-auto rounded-xl bg-gemini-surface p-4 text-xs">{{ JSON.stringify(selectedRun.metrics, null, 2) }}</pre>
                     <div v-for="event in events?.items ?? []" :key="event.eventId" class="mb-3 space-y-2 rounded-xl border border-gemini-border p-4">
                         <p class="text-xs text-gemini-subtext">#{{ event.sequence }} {{ event.type }} · Received {{ date(event.receivedAt) }}</p>
