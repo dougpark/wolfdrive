@@ -1,22 +1,23 @@
 import { readdir } from 'node:fs/promises'
-import { join, extname, relative } from 'node:path'
+import { join, extname, relative, basename } from 'node:path'
 import { db } from '../db'
 import { mediaDirectories, mediaFiles } from '../db/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import { appSettings } from '../db/schema'
 
+export const DEFAULT_IGNORES = ['.git/', 'node_modules/', '.DS_Store', '*.tmp']
+
 // Helper to load current ignore patterns from DB
-async function getIgnorePatterns(): Promise<string[]> {
+export async function getIgnorePatterns(): Promise<string[]> {
     const [row] = await db.select().from(appSettings).where(eq(appSettings.key, 'ignore_patterns'))
-    if (!row) return ['.git/', 'node_modules/', '.DS_Store', '*.tmp']
-    try {
-        return JSON.parse(row.value)
-    } catch {
-        return []
-    }
+    if (!row) return [...DEFAULT_IGNORES]
+    const patterns: unknown = JSON.parse(row.value)
+    if (!Array.isArray(patterns) || patterns.some((pattern) => typeof pattern !== 'string')) throw new Error('Invalid stored ignore rules')
+    return patterns
 }
 
-function shouldIgnore(relativePath: string, filename: string, patterns: string[]): boolean {
+export function shouldIgnore(relativePath: string, filename: string, patterns: string[], rootPath?: string): boolean {
+    const rootRelativePath = rootPath ? `${basename(rootPath)}/${relativePath}` : relativePath
     for (const pattern of patterns) {
         const trimmed = pattern.trim()
         if (!trimmed || trimmed.startsWith('#')) continue
@@ -24,14 +25,15 @@ function shouldIgnore(relativePath: string, filename: string, patterns: string[]
         // Folder ignore rule (e.g., node_modules/ or cache/)
         if (trimmed.endsWith('/')) {
             const dirName = trimmed.slice(0, -1)
-            if (relativePath.includes(`/${dirName}/`) || relativePath.startsWith(`${dirName}/`) || filename === dirName) {
+            if (rootRelativePath.includes(`/${dirName}/`) || rootRelativePath.startsWith(`${dirName}/`) || filename === dirName) {
                 return true
             }
         }
 
         // Glob wildcard pattern matching (e.g., *.tmp, *.log, .DS_Store)
         const glob = new Bun.Glob(trimmed)
-        if (glob.match(filename) || glob.match(relativePath)) {
+        if (glob.match(filename) || glob.match(relativePath)
+            || (!trimmed.includes('/') && rootRelativePath.split('/').some((part) => glob.match(part)))) {
             return true
         }
     }
@@ -39,7 +41,7 @@ function shouldIgnore(relativePath: string, filename: string, patterns: string[]
 }
 
 
-function getMediaCategory(mimeType: string, ext: string): string {
+export function getMediaCategory(mimeType: string, ext: string): string {
     if (mimeType.startsWith('image/')) return 'image'
     if (mimeType.startsWith('video/')) return 'video'
     if (mimeType.startsWith('audio/')) return 'audio'
@@ -77,7 +79,7 @@ export async function scanDirectory(directoryId: string): Promise<{ indexed: num
             const relPath = relative(dir.path, absolutePath)
 
             // Check ignore list
-            if (shouldIgnore(relPath, entry.name, ignorePatterns)) {
+            if (shouldIgnore(relPath, entry.name, ignorePatterns, dir.path)) {
                 skippedCount++
                 continue
             }

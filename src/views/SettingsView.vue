@@ -16,6 +16,7 @@ import { FileCode, Save } from 'lucide-vue-next'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import FolderTagEditor from '@/components/common/FolderTagEditor.vue'
+import IgnoreReviewModal from '@/components/common/IgnoreReviewModal.vue'
 import type { Tag } from '@/types/media'
 
 const { selectedTheme, applyTheme, initTheme } = useTheme()
@@ -41,34 +42,32 @@ const activeCategory = ref<CategoryId>('theme')
 
 // Ignore Patterns State
 const ignoreText = ref('')
-const isSavingIgnore = ref(false)
+const reviewPatterns = ref<string[] | null>(null)
 
 async function fetchIgnorePatterns() {
   try {
     const res = await fetch('/api/settings/ignore')
+    if (!res.ok) throw new Error('Unable to load ignore rules')
     const patterns: string[] = await res.json()
     ignoreText.value = patterns.join('\n')
   } catch (err) {
     console.error('Failed to load ignore patterns', err)
+    storageError.value = 'Unable to load ignore rules.'
   }
 }
 
-async function saveIgnorePatterns() {
-  isSavingIgnore.value = true
-  const patterns = ignoreText.value
+function saveIgnorePatterns() {
+  reviewPatterns.value = ignoreText.value
     .split('\n')
     .map((p) => p.trim())
     .filter((p) => p.length > 0)
 
-  try {
-    await fetch('/api/settings/ignore', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patterns }),
-    })
-  } finally {
-    isSavingIgnore.value = false
-  }
+}
+
+async function ignoreRulesSaved(patterns: string[]) {
+  reviewPatterns.value = null
+  ignoreText.value = patterns.join('\n')
+  await fetchDirectories()
 }
 
 onMounted(() => {
@@ -472,19 +471,20 @@ onBeforeUnmount(() => clearInterval(storageTimer))
                   <div>
                     <h3 class="text-sm font-semibold text-gemini-text flex items-center gap-2">
                       <FileCode class="h-4 w-4 text-gemini-blue" />
-                      Global Ignore List (.gitignore style)
+                      Global Ignore List
                     </h3>
                     <p class="text-xs text-gemini-subtext mt-0.5">
-                      Specify file names, extensions, or directory patterns to exclude from index scans.
+                      Enter file names, glob patterns, or folder names (one per line). Negated rules are not supported.
                     </p>
                   </div>
 
-                  <button @click="saveIgnorePatterns" :disabled="isSavingIgnore"
-                    class="bg-gemini-blue text-white rounded-xl px-3.5 py-1.5 text-xs font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                  <BaseButton variant="primary" @click="saveIgnorePatterns">
                     <Save class="h-3.5 w-3.5" />
-                    <span>{{ isSavingIgnore ? 'Saving...' : 'Save Rules' }}</span>
-                  </button>
+                    <span>Save Rules</span>
+                  </BaseButton>
                 </div>
+                <IgnoreReviewModal v-if="reviewPatterns" :patterns="reviewPatterns"
+                  @close="reviewPatterns = null" @saved="ignoreRulesSaved" />
 
                 <textarea v-model="ignoreText" rows="6"
                   placeholder="node_modules/&#10;.git/&#10;*.tmp&#10;*.log&#10;.DS_Store"

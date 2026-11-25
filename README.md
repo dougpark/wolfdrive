@@ -89,6 +89,23 @@ directory; avoid overlapping monitored folders when folder-tag filtering matters
 File search also searches stored AI summaries and AI tags, but generation is not
 implemented yet. Changes detected by a scan clear outdated AI metadata.
 
+Saving the global ignore list first scans enabled folders into a temporary,
+in-memory preview. Review the paginated new, changed, and removed files before
+accepting; cancelling leaves both the rules and index unchanged. Folder names
+such as `.obsidian` or `.obsidian/` match that directory at any depth. Patterns
+use Bun glob matching, not full gitignore syntax; negated rules are unsupported.
+Dotfiles are excluded independently of the rules, but hidden folders are not.
+
+Accepting rechecks the index and filesystem, then saves the rules and reconciles
+the index in one database transaction. Removed index entries lose their file
+tags, categories, reading progress, and AI metadata; shared tags, monitored
+folder settings, and original disk files remain. Back up the database before
+accepting removals. A failed scan or changed index invalidates the preview; a
+filesystem can still change immediately after the final check. Previews expire
+after 15 minutes or a server restart. Disabled folders are skipped and shown in
+the review. When monitored folders overlap, a file included by any enabled
+folder remains indexed and retains its current folder when possible.
+
 Automatic rescanning is disabled until enabled in Storage & Indexing. The global
 interval is entered in hours (minimum one minute, maximum 365 days) and stored
 in seconds; it is intended to be shared with future AI processing. The first run

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -111,4 +111,151 @@ test('schedule validates input, persists, and can be disabled', async () => {
     expect(storage.schedule.intervalSeconds).toBe(3600)
     const disabled = await (await request('/api/settings/scan-schedule', 'PUT', { intervalSeconds: null })).json() as { nextRunAt: string | null }
     expect(disabled.nextRunAt).toBeNull()
+})
+
+test('ignore review previews, cancels, detects stale changes, and applies without touching source files', async () => {
+    const vault = join(temporary, 'review-vault')
+    mkdirSync(vault)
+    mkdirSync(join(vault, '.obsidian'))
+    const excluded = join(vault, '.obsidian', 'workspace.json')
+    const changed = join(vault, 'changed.txt')
+    const missing = join(vault, 'missing.txt')
+    const added = join(vault, 'new.txt')
+    writeFileSync(excluded, 'settings')
+    writeFileSync(changed, 'before')
+    writeFileSync(missing, 'old')
+    const folderResponse = await request('/api/directories', 'POST', { path: vault })
+    const folder = await folderResponse.json() as { id: string }
+    expect((await request(`/api/scan/${folder.id}`, 'POST')).status).toBe(200)
+    const rows = sqlite.query('SELECT id, path FROM media_files WHERE directory_id = ?').all(folder.id) as { id: string; path: string }[]
+    const excludedId = rows.find((row) => row.path === excluded)!.id
+    const changedId = rows.find((row) => row.path === changed)!.id
+    const tag = await (await request('/api/tags', 'POST', { name: 'Research' })).json() as { id: string }
+    expect((await request(`/api/files/${excludedId}/tags`, 'PUT', { tagIds: [tag.id] })).status).toBe(200)
+    sqlite.query("INSERT INTO reading_state (id, user_id, file_id, percent_read) VALUES ('review-reading', 'usr_default', ?, 40)").run(excludedId)
+    sqlite.query('UPDATE media_files SET ai_summary = ?, ai_tags = ?, custom_categories = ? WHERE id = ?')
+        .run('Important research summary', '["archive"]', '["research"]', excludedId)
+    sqlite.query('UPDATE media_files SET ai_summary = ? WHERE id = ?').run('Old summary', changedId)
+    writeFileSync(changed, 'changed to different content')
+    unlinkSync(missing)
+    writeFileSync(added, 'new content')
+    const oldRules = await (await request('/api/settings/ignore')).json()
+    const body = { patterns: ['.obsidian'] }
+    expect((await request('/api/settings/ignore', 'POST', body)).status).toBe(409)
+
+    async function preview() {
+        const response = await request('/api/settings/ignore/preview', 'POST', body)
+        expect(response.status).toBe(200)
+        return await response.json() as { id: string; counts: { added: number; changed: number; removed: number }; missingCount: number }
+    }
+    const first = await preview()
+    expect(first.counts).toEqual({ added: 1, changed: 1, removed: 2 })
+    expect(first.missingCount).toBe(1)
+    const page = await (await request(`/api/settings/ignore/preview/${first.id}?kind=removed`)).json() as {
+        items: { path: string; impact: { tags: string[]; categories: string[]; aiSummary: string; aiTags: string[]; hasReadingProgress: boolean } }[]
+    }
+    const excludedChange = page.items.find((item) => item.path === excluded)!
+    expect(excludedChange.impact).toEqual({
+        tags: ['Research'], categories: ['research'], aiSummary: 'Important research summary',
+        aiTags: ['archive'], hasReadingProgress: true,
+    })
+    expect(await (await request('/api/settings/ignore')).json()).toEqual(oldRules)
+    expect(sqlite.query('SELECT count(*) AS count FROM media_files WHERE id = ?').get(excludedId)).toEqual({ count: 1 })
+    expect((await request(`/api/settings/ignore/preview/${first.id}`, 'DELETE')).status).toBe(200)
+    expect((await request(`/api/settings/ignore/preview/${first.id}/accept`, 'POST')).status).toBe(404)
+
+    const databaseStale = await preview()
+    sqlite.query('UPDATE media_files SET ai_summary = ? WHERE id = ?').run('Updated research', excludedId)
+    expect((await request(`/api/settings/ignore/preview/${databaseStale.id}/accept`, 'POST')).status).toBe(409)
+    expect(await (await request('/api/settings/ignore')).json()).toEqual(oldRules)
+
+    const filesystemStale = await preview()
+    const extra = join(vault, 'late.txt')
+    writeFileSync(extra, 'late')
+    expect((await request(`/api/settings/ignore/preview/${filesystemStale.id}/accept`, 'POST')).status).toBe(409)
+    unlinkSync(extra)
+
+    const approved = await preview()
+    sqlite.exec("CREATE TRIGGER deny_review_delete BEFORE DELETE ON media_files BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+    expect((await request(`/api/settings/ignore/preview/${approved.id}/accept`, 'POST')).status).toBe(500)
+    expect(await (await request('/api/settings/ignore')).json()).toEqual(oldRules)
+    expect(sqlite.query('SELECT count(*) AS count FROM file_tags WHERE file_id = ?').get(excludedId)).toEqual({ count: 1 })
+    expect(sqlite.query('SELECT count(*) AS count FROM reading_state WHERE file_id = ?').get(excludedId)).toEqual({ count: 1 })
+    sqlite.exec('DROP TRIGGER deny_review_delete')
+    expect((await request(`/api/settings/ignore/preview/${approved.id}/accept`, 'POST')).status).toBe(200)
+    expect(await (await request('/api/settings/ignore')).json()).toEqual(['.obsidian'])
+    expect(existsSync(excluded)).toBe(true)
+    expect(sqlite.query('SELECT count(*) AS count FROM media_files WHERE id = ?').get(excludedId)).toEqual({ count: 0 })
+    expect(sqlite.query('SELECT count(*) AS count FROM file_tags WHERE file_id = ?').get(excludedId)).toEqual({ count: 0 })
+    expect(sqlite.query('SELECT count(*) AS count FROM reading_state WHERE file_id = ?').get(excludedId)).toEqual({ count: 0 })
+    expect(sqlite.query('SELECT count(*) AS count FROM tags WHERE id = ?').get(tag.id)).toEqual({ count: 1 })
+    expect(sqlite.query('SELECT ai_summary FROM media_files WHERE id = ?').get(changedId)).toEqual({ ai_summary: null })
+    expect(sqlite.query('SELECT count(*) AS count FROM media_files WHERE path = ?').get(added)).toEqual({ count: 1 })
+    expect((await request(`/api/scan/${folder.id}`, 'POST')).status).toBe(200)
+    expect(sqlite.query('SELECT count(*) AS count FROM media_files WHERE path = ?').get(excluded)).toEqual({ count: 0 })
+})
+
+test('review handles overlapping folders and rejects incomplete scans', async () => {
+    const root = join(temporary, 'overlap')
+    const childFolder = join(root, 'child')
+    mkdirSync(root)
+    mkdirSync(childFolder)
+    const file = join(childFolder, 'item.txt')
+    writeFileSync(file, 'research')
+    const parent = await (await request('/api/directories', 'POST', { path: root })).json() as { id: string }
+    expect((await request(`/api/scan/${parent.id}`, 'POST')).status).toBe(200)
+    const fileRow = sqlite.query('SELECT id FROM media_files WHERE path = ?').get(file) as { id: string }
+    const childDirectory = await (await request('/api/directories', 'POST', { path: childFolder })).json() as { id: string }
+    const parentTag = await (await request('/api/tags', 'POST', { name: 'Parent folder' })).json() as { id: string }
+    const childTag = await (await request('/api/tags', 'POST', { name: 'Child folder' })).json() as { id: string }
+    await request(`/api/directories/${parent.id}/tags`, 'PUT', { tagIds: [parentTag.id] })
+    await request(`/api/directories/${childDirectory.id}/tags`, 'PUT', { tagIds: [childTag.id] })
+    const result = await request('/api/settings/ignore/preview', 'POST', { patterns: ['overlap/child/'] })
+    expect(result.status).toBe(200)
+    const preview = await result.json() as { id: string }
+    const changes = await (await request(`/api/settings/ignore/preview/${preview.id}?kind=changed`)).json() as {
+        items: { path: string; after: { directoryId: string }; beforeFolderTags: string[]; afterFolderTags: string[] }[]
+    }
+    const reassignment = changes.items.find((item) => item.path === file)!
+    expect(reassignment.after.directoryId).toBe(childDirectory.id)
+    expect(reassignment.beforeFolderTags).toEqual(['Parent folder'])
+    expect(reassignment.afterFolderTags).toEqual(['Child folder'])
+    await request(`/api/directories/${childDirectory.id}/tags`, 'PUT', { tagIds: [] })
+    expect((await request(`/api/settings/ignore/preview/${preview.id}/accept`, 'POST')).status).toBe(409)
+    const revised = await (await request('/api/settings/ignore/preview', 'POST', { patterns: ['overlap/child/'] })).json() as { id: string }
+    expect((await request(`/api/settings/ignore/preview/${revised.id}/accept`, 'POST')).status).toBe(200)
+    expect(sqlite.query('SELECT directory_id FROM media_files WHERE id = ?').get(fileRow.id)).toEqual({ directory_id: childDirectory.id })
+
+    const absent = await (await request('/api/directories', 'POST', { path: join(temporary, 'not-mounted') })).json() as { id: string }
+    const failed = await request('/api/settings/ignore/preview', 'POST', { patterns: ['*.txt'] })
+    expect(failed.status).toBe(500)
+    expect(await (await request('/api/settings/ignore')).json()).toEqual(['overlap/child/'])
+    expect(sqlite.query('SELECT count(*) AS count FROM media_files WHERE id = ?').get(fileRow.id)).toEqual({ count: 1 })
+    await request(`/api/directories/${absent.id}`, 'DELETE')
+})
+
+test('review pages large removal lists and leaves disabled folders untouched', async () => {
+    const bulk = join(temporary, 'bulk')
+    const disabled = join(temporary, 'disabled')
+    mkdirSync(bulk)
+    mkdirSync(disabled)
+    for (let i = 0; i < 55; i++) writeFileSync(join(bulk, `file-${i}.txt`), 'bulk')
+    const disabledFile = join(disabled, 'disabled.txt')
+    writeFileSync(disabledFile, 'keep')
+    const bulkDir = await (await request('/api/directories', 'POST', { path: bulk })).json() as { id: string }
+    const disabledDir = await (await request('/api/directories', 'POST', { path: disabled })).json() as { id: string }
+    expect((await request(`/api/scan/${bulkDir.id}`, 'POST')).status).toBe(200)
+    expect((await request(`/api/scan/${disabledDir.id}`, 'POST')).status).toBe(200)
+    sqlite.query('UPDATE media_directories SET enabled = 0 WHERE id = ?').run(disabledDir.id)
+    const response = await request('/api/settings/ignore/preview', 'POST', { patterns: ['bulk/', 'disabled/'] })
+    expect(response.status).toBe(200)
+    const review = await response.json() as { id: string; counts: { removed: number }; disabledDirectories: string[] }
+    expect(review.counts.removed).toBe(55)
+    expect(review.disabledDirectories).toContain(disabled)
+    const first = await (await request(`/api/settings/ignore/preview/${review.id}?kind=removed&offset=0`)).json() as { items: unknown[]; total: number }
+    const second = await (await request(`/api/settings/ignore/preview/${review.id}?kind=removed&offset=50`)).json() as { items: unknown[]; total: number }
+    expect([first.items.length, second.items.length, first.total, second.total]).toEqual([50, 5, 55, 55])
+    expect((await request(`/api/settings/ignore/preview/${review.id}/accept`, 'POST')).status).toBe(200)
+    expect(sqlite.query('SELECT count(*) AS count FROM media_files WHERE path = ?').get(disabledFile)).toEqual({ count: 1 })
+    expect(existsSync(join(bulk, 'file-0.txt'))).toBe(true)
 })

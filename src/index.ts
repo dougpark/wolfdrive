@@ -6,13 +6,14 @@ import { db } from './db'
 import { mediaDirectories } from './db/schema'
 import { eq, and, like, or, sql, inArray, asc } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
-import { scanDirectory, scanAllUserDirectories } from './services/scanner'
+import { getIgnorePatterns, scanDirectory, scanAllUserDirectories } from './services/scanner'
 import { mediaFiles } from './db/schema'
 import { desc } from "drizzle-orm";
 import { appSettings } from './db/schema'
 import { readingState } from './db/schema'
 import { createStatusApi } from './services/statusApi'
 import { createScanScheduler } from './services/scanScheduler'
+import { acceptIgnorePreview, createIgnorePreview, discardIgnorePreview, getIgnorePreviewPage, IgnoreReviewError } from './services/ignoreReview'
 import {
     tags,
     fileTags,
@@ -1478,52 +1479,58 @@ app.get('/api/reading-state', async (c) => {
 
 // App Settings API Endpoints
 
-// Default ignore rules
-const DEFAULT_IGNORES = [
-    'node_modules/',
-    '.git/',
-    '.DS_Store',
-    '*.tmp',
-    '*.log',
-    '$RECYCLE.BIN/',
-    'System Volume Information/'
-]
-
 // GET /api/settings/ignore - Fetch ignore list
-app.get('/api/settings/ignore', async (c) => {
-    const [row] = await db.select().from(appSettings).where(eq(appSettings.key, 'ignore_patterns'))
+app.get('/api/settings/ignore', async (c) => c.json(await getIgnorePatterns()))
 
-    if (!row) {
-        return c.json(DEFAULT_IGNORES)
-    }
+app.post('/api/settings/ignore', (c) => c.json({ error: 'Create and accept an ignore-rule preview instead.' }, 409))
 
+app.post('/api/settings/ignore/preview', async (c) => {
+    const body = await c.req.json<{ patterns?: unknown }>()
     try {
-        return c.json(JSON.parse(row.value))
-    } catch {
-        return c.json(DEFAULT_IGNORES)
+        const run = await scanScheduler.run(() => createIgnorePreview(c.get('userId'), body.patterns))
+        if (!run.started) return c.json({ error: 'A scan is already running.' }, 409)
+        return c.json(run.result)
+    } catch (error) {
+        if (error instanceof IgnoreReviewError) return c.json({ error: error.message }, error.status === 400 ? 400 : 409)
+        console.error('Ignore preview failed:', error)
+        return c.json({ error: `Preview scan failed: ${error instanceof Error ? error.message : String(error)}` }, 500)
     }
 })
 
-// POST /api/settings/ignore - Update ignore list
-app.post('/api/settings/ignore', async (c) => {
-    const { patterns } = await c.req.json<{ patterns: string[] }>()
+app.get('/api/settings/ignore/preview/:id', (c) => {
+    const kind = c.req.query('kind')
+    const offset = Number(c.req.query('offset') ?? '0')
+    if ((kind !== 'added' && kind !== 'changed' && kind !== 'removed') || !Number.isSafeInteger(offset) || offset < 0) {
+        return c.json({ error: 'Invalid preview page.' }, 400)
+    }
+    try {
+        return c.json(getIgnorePreviewPage(c.get('userId'), c.req.param('id'), kind, offset, 50))
+    } catch (error) {
+        if (error instanceof IgnoreReviewError) return c.json({ error: error.message }, 404)
+        throw error
+    }
+})
 
-    await db
-        .insert(appSettings)
-        .values({
-            key: 'ignore_patterns',
-            value: JSON.stringify(patterns),
-            updatedAt: new Date().toISOString(),
-        })
-        .onConflictDoUpdate({
-            target: appSettings.key,
-            set: {
-                value: JSON.stringify(patterns),
-                updatedAt: new Date().toISOString(),
-            },
-        })
+app.delete('/api/settings/ignore/preview/:id', (c) => {
+    try {
+        discardIgnorePreview(c.get('userId'), c.req.param('id'))
+        return c.json({ success: true })
+    } catch (error) {
+        if (error instanceof IgnoreReviewError) return c.json({ error: error.message }, 404)
+        throw error
+    }
+})
 
-    return c.json({ success: true, patterns })
+app.post('/api/settings/ignore/preview/:id/accept', async (c) => {
+    try {
+        const run = await scanScheduler.run(() => acceptIgnorePreview(c.get('userId'), c.req.param('id')))
+        if (!run.started) return c.json({ error: 'A scan is already running.' }, 409)
+        return c.json(run.result)
+    } catch (error) {
+        if (error instanceof IgnoreReviewError) return c.json({ error: error.message }, error.status === 404 ? 404 : 409)
+        console.error('Ignore review acceptance failed:', error)
+        return c.json({ error: `Unable to apply preview: ${error instanceof Error ? error.message : String(error)}` }, 500)
+    }
 })
 
 const statusApi = createStatusApi(db, {
